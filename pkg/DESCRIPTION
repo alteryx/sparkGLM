@@ -1,0 +1,19 @@
+Package: sparkGLM
+Type: Package
+Title: GLM functions for SparkR
+Version: 0.1
+Date: 2015-06-01
+Author: Chris Freeman & Dan Putler
+Imports:
+    methods,
+    SparkR
+Depends:
+    R (>= 3.1),
+    methods,
+    SparkR
+Suggests:
+    testthat
+Description: GLM functions for SparkR
+License: Apache License (== 2.0)
+Collate:
+    'test.R'
