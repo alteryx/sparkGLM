@@ -12,3 +12,8 @@ You'll need to use the `--jars` flag to include this package when you initialize
 --driver-class-path=/Users/cfreeman/SparkR/sparkGLM/pkg/src/target/scala-2.10/sparkGLM-assembly-0.1.jar
 ```
 (note the use of `--driver-class-path` due to [SPARK_5185](https://issues.apache.org/jira/browse/SPARK-5185))
+
+Once you're in R, import the package:
+```R
+library(sparkGLM, lib.loc="/path/to/sparkGLM/lib/")
+```
