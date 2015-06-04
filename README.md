@@ -9,7 +9,7 @@ You'll need to use the `--jars` flag to include this package when you initialize
 ```bash
 <SPARK HOME>/bin/sparkR \
 --jars=/path/to/sparkGLM/pkg/src/target/scala-2.10/sparkGLM-assembly-<version>.jar \
---driver-class-path=/Users/cfreeman/SparkR/sparkGLM/pkg/src/target/scala-2.10/sparkGLM-assembly-0.1.jar
+--driver-class-path=/path/to/sparkGLM/pkg/src/target/scala-2.10/sparkGLM-assembly-0.1.jar
 ```
 (note the use of `--driver-class-path` due to [SPARK_5185](https://issues.apache.org/jira/browse/SPARK-5185))
 

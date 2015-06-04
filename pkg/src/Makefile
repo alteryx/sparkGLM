@@ -3,7 +3,7 @@ SPARKGLM_VERSION := 0.1
 JAR_NAME := sparkGLM-assembly-$(SPARKGLM_VERSION).jar
 SBT_TARGET_NAME := target/scala-$(SCALA_VERSON)/$(JAR_NAME)
 
-SCALA_SOURE_DIR := src/main/scala/com/Alteryx/sparkGLM
+SCALA_SOURCE_DIR := src/main/scala/com/Alteryx/sparkGLM
 RESOURCE_DIR := src/main/resources
 
 SCALA_FILES := $(wildcard $(SCALA_SOURCE_DIR)/*.scala)
