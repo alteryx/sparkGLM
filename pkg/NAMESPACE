@@ -1,2 +1,0 @@
-import(SparkR)
-export("helloWorldTest")
