@@ -1,5 +1,5 @@
 # sparkGLM
-An R-like GLM package for Apache Spark.
+A package for training linear and generalized linear models using least-squares (linear models) and Fisher scoring as the training methods. This package is strongly influenced by the lm() and glm() functions of R.
 
 ## Requires
 Spark 1.4.0
