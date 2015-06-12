@@ -13,6 +13,8 @@ licenses := Seq("Apache-2.0" -> url("http://opensource.org/licenses/Apache-2.0")
 sparkComponents ++= Seq("sql", "mllib")
 
 libraryDependencies ++= Seq(
+  "org.slf4j" % "slf4j-api" % "1.7.2",
+  "org.slf4j" % "slf4j-log4j12" % "1.7.2",
   "org.scalatest" %% "scalatest" % "1.9.1" % "test",
   "org.scalanlp" % "breeze_2.10" % "0.11.2",
   "com.github.fommil.netlib" % "all" % "1.1.2" pomOnly(),
