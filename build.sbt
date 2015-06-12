@@ -20,6 +20,13 @@ libraryDependencies ++= Seq(
 )
 
 resolvers ++= Seq(
+  "Local Maven Repository" at Path.userHome.asFile.toURI.toURL + ".m2/repository",
+  "Typesafe" at "http://repo.typesafe.com/typesafe/releases",
+  "Cloudera Repository" at "https://repository.cloudera.com/artifactory/cloudera-repos/",
+  "Spray" at "http://repo.spray.cc"
+)
+
+resolvers ++= Seq(
   "Amplab ml-matrix repo" at "https://s3-us-west-1.amazonaws.com/",
   Resolver.mavenLocal
 )
