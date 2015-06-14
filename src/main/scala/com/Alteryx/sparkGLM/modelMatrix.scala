@@ -49,7 +49,7 @@ object modelMatrix {
                         fields.foreach { field =>
                           levels += (field -> getLevels(df, field))
                         }
-                        return levels
+                        levels
                       }
   
   //Create an array of k-1 distinct categories for a single Column
