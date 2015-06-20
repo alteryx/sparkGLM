@@ -60,21 +60,29 @@ object LM {
           coefs: DenseMatrix[Double],
           nrows: Double,
           ncols: Double): (Double, Double, Double) = {
+    val npart = X.rdd.partitions.size
     val ySums = Y.rdd.map(y => sum(y.mat(::, 0)))
     val yMean = (ySums.collect.reduce(_+_))/nrows
     val XY = X.rdd.zip(Y.rdd).map(x => (x._1.mat, x._2.mat))
-    // the mega tuple goes here
-    val errTopBot = XY.map(x => ((x._2 - (x._1 * coefs)), ((x._1 * coefs) :+ (-1.0*yMean)), (x._2 :+ (-1.0*yMean)))).collect
-    val err = errTopBot(0)._1
-    val top1 = errTopBot(0)._2
-    val bot1 = errTopBot(0)._3
-    //val errSq = err.t * err
-    val errSq = err.map(x => x.t * x)
-    val sse = errSq.toArray.reduce(_+_)
-    val topSq = top1.map(x => x.t * x)
-    val top = topSq.toArray.reduce(_+_)
-    val botSq = bot1.map(x => x.t * x)
-    val bot = botSq.toArray.reduce(_+_)
+    // Create an array of 3-tuples, where each element is a 1X1 matrix. One
+    // tuple per partition
+    val errTopBot = XY.map(x => (x._2 - (x._1 * coefs),
+      (x._1 * coefs) :+ (-1.0*yMean),
+      x._2 :+ (-1.0*yMean))).collect
+    var err = errTopBot(0)._1
+    var sse = (err.t * err).toArray(0)
+    var top1 = errTopBot(0)._2
+    var top = (top1.t * top1).toArray(0)
+    var bot1 = errTopBot(0)._3
+    var bot = (bot1.t * bot1).toArray(0)
+    for(i <- 1 to (npart - 1)) {
+      err = errTopBot(i)._1
+      sse = sse + (err.t * err).toArray(0)
+      top1 = errTopBot(i)._2
+      top = top + (top1.t * top1).toArray(0)
+      bot1 = errTopBot(i)._3
+      bot = bot + (bot1.t * bot1).toArray(0)
+    }
     val r2 = top/bot
     val fStat = ((bot - sse)/(ncols - 1.0))/(sse/(nrows - ncols))
     (sse, r2, fStat)
