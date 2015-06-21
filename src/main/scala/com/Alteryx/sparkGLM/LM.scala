@@ -19,10 +19,10 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions
 
 case class PreLM(coefs: DenseMatrix[Double],
-  xtxi: DenseMatrix[Double],
-  sse: Double,
-  r2: Double,
-  fStat: Double)
+                 xtxi: DenseMatrix[Double],
+                 sse: Double,
+                 r2: Double,
+                 fStat: Double)
 
 case class LM(xnames: Array[String],
               yname: String,
@@ -64,24 +64,20 @@ object LM {
     val ySums = Y.rdd.map(y => sum(y.mat(::, 0)))
     val yMean = (ySums.collect.reduce(_+_))/nrows
     val XY = X.rdd.zip(Y.rdd).map(x => (x._1.mat, x._2.mat))
-    // Create an array of 3-tuples, where each element is a 1X1 matrix. One
+    // Create an array of 3-tuples, where each element is a double. One
     // tuple per partition
-    val errTopBot = XY.map(x => (x._2 - (x._1 * coefs),
-      (x._1 * coefs) :+ (-1.0*yMean),
-      x._2 :+ (-1.0*yMean))).collect
-    var err = errTopBot(0)._1
-    var sse = (err.t * err).toArray(0)
-    var top1 = errTopBot(0)._2
-    var top = (top1.t * top1).toArray(0)
-    var bot1 = errTopBot(0)._3
-    var bot = (bot1.t * bot1).toArray(0)
+    val errTopBot1 = XY.map(x => (
+      ((x._2 - (x._1 * coefs)).t * (x._2 - (x._1 * coefs))).toArray(0),
+      (((x._1 * coefs) :+ (-1.0*yMean)).t * ((x._1 * coefs) :+ (-1.0*yMean))).toArray(0),
+      ((x._2 :+ (-1.0*yMean)).t * (x._2 :+ (-1.0*yMean))).toArray(0)))
+    val errTopBot = errTopBot1.collect
+    var sse = errTopBot(0)._1
+    var top = errTopBot(0)._2
+    var bot = errTopBot(0)._3
     for(i <- 1 to (npart - 1)) {
-      err = errTopBot(i)._1
-      sse = sse + (err.t * err).toArray(0)
-      top1 = errTopBot(i)._2
-      top = top + (top1.t * top1).toArray(0)
-      bot1 = errTopBot(i)._3
-      bot = bot + (bot1.t * bot1).toArray(0)
+      sse = sse + errTopBot(i)._1
+      top = top + errTopBot(i)._2
+      bot = bot + errTopBot(i)._3
     }
     val r2 = top/bot
     val fStat = ((bot - sse)/(ncols - 1.0))/(sse/(nrows - ncols))
@@ -182,6 +178,9 @@ object LM {
   }
 
   // TODO: Create a summary method for prining model output.
-  //def summary(obj: LM): LMSummary
+  def summary(obj: LM): LMSummary = {
+
+    
+  }
 
 }
