@@ -178,9 +178,9 @@ object LM {
   }
 
   // TODO: Create a summary method for prining model output.
-  def summary(obj: LM): LMSummary = {
-
-    
-  }
+  // def summary(obj: LM): LMSummary = {
+  //
+  //
+  // }
 
 }
