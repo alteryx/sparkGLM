@@ -172,9 +172,19 @@ object LM {
   // A predict method for LM objects
   // TODO: it needs error checking, and it will need to be able to address
   // DataFrames with more than one partition
-  def predict(obj: LM, newdata: DataFrame): DenseMatrix[Double] = {
-    val newX = utils.dfToDenseMatrix(newdata)
-    newX * obj.coefs
+  case class predicted(index: Int, value: Double)
+
+  def predict(obj: LM, newData: DataFrame): DataFrame = {
+    val newX = utils.dfToDenseMatrix(newData)
+    val predVals = newX * obj.coefs //This is a DenseMatrix[Double]
+    //Create an RDD[predicted(index, value)]
+    val predRDD = newData.sqlContext.sparkContext.parallelize(
+      predVals.toArray.zipWithIndex.map { elem =>
+        predicted(elem._2, elem._1)
+      }
+    )
+    //Create a DataFrame with schema inferred from `predicted` case class
+    newData.sqlContext.createDataFrame(predRDD)
   }
 
   // TODO: Create a summary method for prining model output.
