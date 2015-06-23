@@ -175,17 +175,37 @@ object LM {
   case class predicted(index: Int, value: Double)
 
   def predict(obj: LM, newData: DataFrame): DataFrame = {
+    if (newData.rdd.partitions.size == 1) {
+      predictSingle(obj, newData)
+    } else {
+      predictMultiple(obj, newData)
+    }
+  }
+
+  def predictSingle(obj: LM, newData: DataFrame): DataFrame = {
     val newX = utils.dfToDenseMatrix(newData)
-    val predVals = newX * obj.coefs //This is a DenseMatrix[Double]
-    //Create an RDD[predicted(index, value)]
+    val predVals = (newX * obj.coefs).toArray.zipWithIndex //This is an Array[(Double, Int)]
+    //Create an RDD[predicted(index, value)] with a single partition
     val predRDD = newData.sqlContext.sparkContext.parallelize(
-      predVals.toArray.zipWithIndex.map { elem =>
+      predVals.map {elem =>
         predicted(elem._2, elem._1)
-      }
+      }, 1
     )
     //Create a DataFrame with schema inferred from `predicted` case class
     newData.sqlContext.createDataFrame(predRDD)
   }
+
+  def predictMultiple(obj: LM, newData: DataFrame): DataFrame = {
+    val newX = utils.dataFrameToMatrix(newData)
+    val predVals = newX.flatMap { elem =>
+      (elem * obj.coefs).toArray
+    }.zipWithIndex //This is an RDD[Array[(Double, Long)]]
+    //Create a DataFrame with schema inferred from `predicted` case class
+    newData.sqlContext.createDataFrame(predVals.map{ elem =>
+      predicted(elem._2.toInt, elem._1)
+    })
+  }
+
 
   // TODO: Create a summary method for prining model output.
   // def summary(obj: LM): LMSummary = {
