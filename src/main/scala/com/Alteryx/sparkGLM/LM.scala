@@ -31,7 +31,8 @@ case class LM(xnames: Array[String],
               sigma: Double,
               r2: Double,
               fStat: Double,
-              nrow: Double)
+              nrow: Double,
+              npart: Int)
 
 object LM {
 
@@ -42,7 +43,7 @@ object LM {
     val XY = X.rdd.zip(Y.rdd).map(x => (x._1.mat, x._2.mat))
     val ATA_ATb = XY.map { part =>
       (part._1.t * part._1, part._1.t * part._2)
-      }
+    }
 
       val treeBranchingFactor = X.rdd.context.getConf.getInt("spark.mlmatrix.treeBranchingFactor", 2).toInt
       val depth = math.ceil(math.log(ATA_ATb.partitions.size)/math.log(treeBranchingFactor)).toInt
@@ -147,8 +148,8 @@ object LM {
       "The 'y' DataFrame must have only one column")
     val yvar = y.columns
     val nrow = y.count.toDouble
-    val single = x.rdd.partitions.size == 1
-    val components = if (single) fitSingle(x, y) else fitMultiple(x,y)
+    val npart = x.rdd.partitions.size
+    val components = if (npart == 1) fitSingle(x, y) else fitMultiple(x,y)
     val coefs = components.coefs
     val XtXi = components.xtxi
     val sse = components.sse
@@ -166,7 +167,8 @@ object LM {
         sigma = sigma,
         r2 = r2,
         fStat = fStat,
-        nrow = nrow)
+        nrow = nrow,
+        npart = npart)
   }
 
   // A predict method for LM objects
@@ -175,6 +177,8 @@ object LM {
   case class predicted(index: Int, value: Double)
 
   def predict(obj: LM, newData: DataFrame): DataFrame = {
+    require(obj.xnames.diff(newData.columns).size == 0,
+       "Not all predictors in the estimation data are in the data to be predicted")
     if (newData.rdd.partitions.size == 1) {
       predictSingle(obj, newData)
     } else {
@@ -206,11 +210,33 @@ object LM {
     })
   }
 
-
-  // TODO: Create a summary method for prining model output.
-  // def summary(obj: LM): LMSummary = {
-  //
-  //
-  // }
-
+  // TODO: Create a summary method for printing model output.
+  // NOTE: Hold off. There is no good way to get summary statistics since distributions
+  // for getting p-values from various distributions don't really exist. There seems
+  // to be a way to get a chi-square statistic via MLlib, but we aren't sure what
+  // is being called under the hood. Likely the Apache Commons Java Math classes.
+  def summary(obj: LM) = {
+    val adjR2 = 1.0 - (((1.0 - obj.r2)*(obj.nrow - 1.0))/(obj.nrow - obj.xnames.size - 1.0))
+    val dfm = obj.xnames.size - 1
+    val dfe = obj.nrow.toInt - obj.xnames.size
+    val coefArray = obj.coefs.toArray
+    val tVals = coefArray.zip(obj.stdErr).map(x => x._1/x._2)
+    var formula = obj.xnames(0)
+    for (i <- 1 to (obj.xnames.size - 1)) {
+      formula = formula + " + " + obj.xnames(i)
+    }
+    formula = obj.yname + " ~ " + formula
+    println("Model:")
+    println(formula)
+    println("\n")
+    println("Coefficients:")
+    println(String.format("%-12s %12s %12s %12s", "", "Estimate", "Std. Error", "t value"))
+    for (i <- 0 to (obj.xnames.size - 1)) {
+      println(String.format("%-12s %12s %12s %12s",obj.xnames(i), utils.sigDigits(coefArray(i), 6).toString, utils.sigDigits(obj.stdErr(i), 6).toString, utils.sigDigits(tVals(i), 6).toString))
+    }
+    println("\n")
+    println("Residual standard error: " + utils.sigDigits(obj.sigma, 6).toString + " on " + dfe.toString + " degress of freedom")
+    println("Multiple R-Squared: " + utils.roundDigits(obj.r2, 4).toString + ", Adusted R-Squared: " + utils.roundDigits(adjR2, 4).toString)
+    println("F-statistic: " + utils.sigDigits(obj.fStat, 5).toString + " on " + dfm.toString + " and " + dfe.toString + " DF")
+  }
 }

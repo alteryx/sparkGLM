@@ -44,4 +44,30 @@ object utils {
     a._2 :+= b._2
     a
   }
+
+  // A method to round a number to a desired number of decimal places
+  def roundDigits(num: Double, digits: Int): Double = {
+    val top = (scala.math.round(num*scala.math.pow(10, digits))).toLong
+    top/scala.math.pow(10, digits)
+  }
+
+  // A method to reduce Doubles to a desired number of significant digits for
+  // print purposes. Based on Pyrolistical response to:
+  // http://stackoverflow.com/questions/202302/rounding-to-an-arbitrary-number-of-significant-digits
+  def sigDigits(num: Double, digits: Int): Double = {
+    if (num == 0) {
+      0.0
+    } else {
+      val absNum = scala.math.abs(num)
+      val d = scala.math.ceil(scala.math.log10(absNum))
+      val power = (digits - d).toInt
+      val magnitude = scala.math.pow(10, power)
+      val shifted = (scala.math.round(absNum*magnitude)).toLong
+      if (num > 0) {
+        shifted/magnitude
+      } else {
+        -1.0*shifted/magnitude
+      }
+    }
+  }
 }
