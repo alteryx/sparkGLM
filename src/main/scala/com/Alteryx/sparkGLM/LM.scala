@@ -174,13 +174,41 @@ object LM {
   // A predict method for LM objects
   // TODO: it needs error checking, and it will need to be able to address
   // DataFrames with more than one partition
-  //def predict(obj: LM, newdata: DataFrame): DataFrame = {
-  //  require(obj.xnames.diff(newdata.columns).size == 0,
-  //    "Not all predictors in the estimation data are in the data to be predicted")
-  //  val newX = if (obj.npart == 1) {utils.dfToDenseMatrix(newdata)
-  //    newX * obj.coefs
-  //}
-//  def predictSingle(obj: LM, newdata: DataFrame)
+  case class predicted(index: Int, value: Double)
+
+  def predict(obj: LM, newData: DataFrame): DataFrame = {
+    require(obj.xnames.diff(newData.columns).size == 0,
+       "Not all predictors in the estimation data are in the data to be predicted")
+    if (newData.rdd.partitions.size == 1) {
+      predictSingle(obj, newData)
+    } else {
+      predictMultiple(obj, newData)
+    }
+  }
+
+  def predictSingle(obj: LM, newData: DataFrame): DataFrame = {
+    val newX = utils.dfToDenseMatrix(newData)
+    val predVals = (newX * obj.coefs).toArray.zipWithIndex //This is an Array[(Double, Int)]
+    //Create an RDD[predicted(index, value)] with a single partition
+    val predRDD = newData.sqlContext.sparkContext.parallelize(
+      predVals.map {elem =>
+        predicted(elem._2, elem._1)
+      }, 1
+    )
+    //Create a DataFrame with schema inferred from `predicted` case class
+    newData.sqlContext.createDataFrame(predRDD)
+  }
+
+  def predictMultiple(obj: LM, newData: DataFrame): DataFrame = {
+    val newX = utils.dataFrameToMatrix(newData)
+    val predVals = newX.flatMap { elem =>
+      (elem * obj.coefs).toArray
+    }.zipWithIndex //This is an RDD[Array[(Double, Long)]]
+    //Create a DataFrame with schema inferred from `predicted` case class
+    newData.sqlContext.createDataFrame(predVals.map{ elem =>
+      predicted(elem._2.toInt, elem._1)
+    })
+  }
 
   // TODO: Create a summary method for printing model output.
   // NOTE: Hold off. There is no good way to get summary statistics since distributions
@@ -211,5 +239,4 @@ object LM {
     println("Multiple R-Squared: " + utils.roundDigits(obj.r2, 4).toString + ", Adusted R-Squared: " + utils.roundDigits(adjR2, 4).toString)
     println("F-statistic: " + utils.sigDigits(obj.fStat, 5).toString + " on " + dfm.toString + " and " + dfe.toString + " DF")
   }
-
 }
