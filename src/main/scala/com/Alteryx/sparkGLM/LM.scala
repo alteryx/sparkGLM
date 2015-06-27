@@ -215,6 +215,7 @@ object LM {
   // for getting p-values from various distributions don't really exist. There seems
   // to be a way to get a chi-square statistic via MLlib, but we aren't sure what
   // is being called under the hood. Likely the Apache Commons Java Math classes.
+  // Actually, no: val pValue = 1 - StudentsT(200.0).cdf(1.9)
   def summary(obj: LM) = {
     val adjR2 = 1.0 - (((1.0 - obj.r2)*(obj.nrow - 1.0))/(obj.nrow - obj.xnames.size - 1.0))
     val dfm = obj.xnames.size - 1
