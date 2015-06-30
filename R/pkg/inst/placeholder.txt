@@ -1,0 +1,3 @@
+Needed to preserve the inst/ directory on github.
+
+This file will disappear once we add more to inst.
