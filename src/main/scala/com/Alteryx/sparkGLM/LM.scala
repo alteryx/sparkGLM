@@ -41,13 +41,13 @@ object LM {
       X: RowPartitionedMatrix,
       Y: RowPartitionedMatrix): (DenseMatrix[Double], DenseMatrix[Double])  = {
     val XY = X.rdd.zip(Y.rdd).map(x => (x._1.mat, x._2.mat))
-    val ATA_ATb = XY.map { part =>
+    val XtX_Xty = XY.map { part =>
       (part._1.t * part._1, part._1.t * part._2)
     }
 
       val treeBranchingFactor = X.rdd.context.getConf.getInt("spark.mlmatrix.treeBranchingFactor", 2).toInt
-      val depth = math.ceil(math.log(ATA_ATb.partitions.size)/math.log(treeBranchingFactor)).toInt
-      val reduced = edu.berkeley.cs.amplab.mlmatrix.util.Utils.treeReduce(ATA_ATb, utils.reduceNormal, depth=depth)
+      val depth = math.ceil(math.log(XtX_Xty.partitions.size)/math.log(treeBranchingFactor)).toInt
+      val reduced = edu.berkeley.cs.amplab.mlmatrix.util.Utils.treeReduce(XtX_Xty, utils.reduceNormal, depth=depth)
 
       reduced
   }
@@ -215,7 +215,8 @@ object LM {
   // for getting p-values from various distributions don't really exist. There seems
   // to be a way to get a chi-square statistic via MLlib, but we aren't sure what
   // is being called under the hood. Likely the Apache Commons Java Math classes.
-  def summary(obj: LM) = {
+  // Actually, no: val pValue = 1 - StudentsT(200.0).cdf(1.9)
+  def summaryArray(obj: LM): Array[String] = {
     val adjR2 = 1.0 - (((1.0 - obj.r2)*(obj.nrow - 1.0))/(obj.nrow - obj.xnames.size - 1.0))
     val dfm = obj.xnames.size - 1
     val dfe = obj.nrow.toInt - obj.xnames.size
@@ -226,17 +227,32 @@ object LM {
       formula = formula + " + " + obj.xnames(i)
     }
     formula = obj.yname + " ~ " + formula
-    println("Model:")
-    println(formula)
-    println("\n")
-    println("Coefficients:")
-    println(String.format("%-12s %12s %12s %12s", "", "Estimate", "Std. Error", "t value"))
+
+    val header = String.format("%-12s %12s %12s %12s", "", "Estimate", "Std. Error", "t value")
+    var coefArrFormatted = new Array[String](obj.xnames.size)
     for (i <- 0 to (obj.xnames.size - 1)) {
-      println(String.format("%-12s %12s %12s %12s",obj.xnames(i), utils.sigDigits(coefArray(i), 6).toString, utils.sigDigits(obj.stdErr(i), 6).toString, utils.sigDigits(tVals(i), 6).toString))
+      coefArrFormatted(i) = String.format("%-12s %12s %12s %12s",obj.xnames(i), utils.sigDigits(coefArray(i), 6).toString, utils.sigDigits(obj.stdErr(i), 6).toString, utils.sigDigits(tVals(i), 6).toString)
     }
-    println("\n")
-    println("Residual standard error: " + utils.sigDigits(obj.sigma, 6).toString + " on " + dfe.toString + " degress of freedom")
-    println("Multiple R-Squared: " + utils.roundDigits(obj.r2, 4).toString + ", Adusted R-Squared: " + utils.roundDigits(adjR2, 4).toString)
-    println("F-statistic: " + utils.sigDigits(obj.fStat, 5).toString + " on " + dfm.toString + " and " + dfe.toString + " DF")
+    val coefficients = (header +: coefArrFormatted).reduce { (acc, elem) =>
+      acc + "\n" + elem
+    }
+    val RSE = "Residual standard error: " + utils.sigDigits(obj.sigma, 6).toString + " on " + dfe.toString + " degrees of freedom"
+    val R2 = "Multiple R-Squared: " + utils.roundDigits(obj.r2, 4).toString + ", Adusted R-Squared: " + utils.roundDigits(adjR2, 4).toString
+    val Fstat = "F-statistic: " + utils.sigDigits(obj.fStat, 5).toString + " on " + dfm.toString + " and " + dfe.toString + " DF"
+
+    Array(formula,
+          coefficients,
+          RSE,
+          R2,
+          Fstat)
+  }
+
+  def summary(obj: LM): Unit = {
+    val rawSummary = summaryArray(obj)
+    println("Model:")
+    println(rawSummary(0) + "\n")
+    println("Coefficients:")
+    println(rawSummary(1) + "\n")
+    rawSummary.slice(2, 5).foreach(x => println(x))
   }
 }
