@@ -1,0 +1,7 @@
+#import(SparkR)
+export("helloWorldTest")
+export("sparkLM",
+       "sparkLM.jobj",
+       "sparkLM.formula")
+export("predict.sparkLM")
+export("summary.sparkLM")
