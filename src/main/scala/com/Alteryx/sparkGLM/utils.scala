@@ -134,4 +134,34 @@ object utils {
       }
     }
   }
+
+  //
+  // Miscellaneous functions
+  //
+    def sign(num: Double): Double = {
+      val theSign = {
+        if (num < 0.0) {
+          -1.0
+        }
+        else if (num > 0.0) {
+          1.0
+        }
+        else {
+          0.0
+        }
+      }
+      theSign
+    }
+
+    def vecSigns(vec: DenseMatrix[Double]): DenseMatrix[Double] = {
+      require(vec.cols == 1, "The provided DenseMatrix can only have a single column")
+      val vecArray = vec.toArray
+      val signs = vecArray.map(x => sign(x))
+      new DenseMatrix(rows = signs.size, cols = 1, signs)
+    }
+
+    def repValue(value: Double, nrow: Int): DenseMatrix[Double] = {
+      require(nrow > 0, "The number of rows must be strictly greater than 0")
+      DenseVector.fill(nrow){value}.toDenseMatrix
+    }
 }
