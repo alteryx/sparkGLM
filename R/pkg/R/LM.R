@@ -1,7 +1,4 @@
 
-sparkLM <- function(x, ...) {
-  UseMethod("sparkLM", x)
-}
 
 sparkLM.formula <- function(formula, df, omitNAs = TRUE) {
   if (class(formula) != "formula") {
@@ -62,17 +59,33 @@ predict.sparkLM <- function(model, newData) {
   SparkR:::dataFrame(sdf)
 }
 
-summary.sparkLM <- function(model) {
+summaryObj.sparkLM <- function(model) {
+  if (class(model) != "sparkLM") {
+    stop("model must be a sparkLM model object.")
+  }
   rawSummary <- SparkR:::callJStatic("com.Alteryx.sparkGLM.LM",
                                      "summaryArray",
                                      model$jobj)
-  cat("\nModel:\n")
-  cat(rawSummary[[1]])
-  cat("\n")
-  cat("\nCoefficients:\n")
-  cat(rawSummary[[2]], "\n")
-  cat("\n")
-  for(i in 3:5) {
-    cat(rawSummary[[i]], "\n")
+  summaryOut <- list()
+  summaryOut$model <- rawSummary[[1]]
+  summaryOut$coefficients <- rawSummary[[2]]
+  summaryOut$RSE <- rawSummary[[3]]
+  summaryOut$R2 <- rawSummary[[4]]
+  summaryOut$Fstat <- rawSummary[[5]]
+  summaryOut$printSummary <- function() {
+    cat("\nModel:\n")
+    cat(summaryOut$model)
+    cat("\n")
+    cat("\nCoefficients:\n")
+    cat(summaryOut$coefficients, "\n")
+    cat("\n")
+    for(i in c("RSE", "R2", "Fstat")) {
+      cat(summaryOut[[i]], "\n")
+    }
   }
+  summaryOut
+}
+summary.sparkLM <- function(model) {
+  summary <- summaryObj(model)
+  summary$printSummary()
 }
