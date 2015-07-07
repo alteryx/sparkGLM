@@ -16,6 +16,7 @@ Suggests:
 Description: GLM functions for SparkR
 License: Apache License (== 2.0)
 Collate:
+    'generics.R'
     'test.R'
     'utils.R'
     'LM.R'
