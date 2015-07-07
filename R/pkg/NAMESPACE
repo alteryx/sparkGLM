@@ -4,4 +4,6 @@ export("sparkLM",
        "sparkLM.jobj",
        "sparkLM.formula")
 export("predict.sparkLM")
-export("summary.sparkLM")
+export("summaryObj",
+       "summaryObj.sparkLM",
+       "summary.sparkLM")
