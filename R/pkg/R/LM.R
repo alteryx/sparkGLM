@@ -1,5 +1,26 @@
+# LM.R - Linear Model class and methods for SparkR
 
+#' @include generics.R utils.R
+NULL
 
+#' @title sparkLM
+#' @description sparkLM is used to fit linear models in SparkR and is influenced heavily by R's `lm'
+#' function. It works seamlessly with SparkR DataFrames and returns an S3 object of class "sparkLM".
+#' @rdname sparkLM
+#' 
+#' @param formula An R formula (e.g. y ~ x1 + x2) specifying the parameters of your model.
+#' @param df A SparkR DataFrame containing your target field as well as any predictors you plan to
+#' include in the model.
+#' @param omitNAs A logical vector indicating whether you want to omit rows which contain null values
+#' from the DataFrame prior to model estimation.
+#' @export
+#' @example
+#' \dontrun{
+#' sc <- sparkR.init()
+#' sqlCtx <- sparkRSQL.init(sc)
+#' irisDF <- createDataFrame(iris)
+#' theModel <- sparkLM(Sepal.Length ~ Petal.Length + Petal.Width + Species)
+#' }
 sparkLM.formula <- function(formula, df, omitNAs = TRUE) {
   if (class(formula) != "formula") {
     stop("The provided formula is not a formula object.")
@@ -22,6 +43,12 @@ sparkLM.formula <- function(formula, df, omitNAs = TRUE) {
   sparkLM(theModelObj, theCall)
 }
 
+#' @rdname sparkLM
+#' @export
+#' 
+#' @param jobj A SparkR Java object
+#' @call The call used when constructing the model. If a call is included, it will be added to the
+#' resulting model object.
 sparkLM.jobj <- function(jobj, call = NULL) {
   theModel <- structure(list(), class = "sparkLM")
   theModel$jobj <- jobj
@@ -44,6 +71,19 @@ sparkLM.jobj <- function(jobj, call = NULL) {
   theModel
 }
 
+#' @title Predict
+#' @description Compute predicted values based on a model estimated with the `sparkLM` function.
+#' @rdname sparkLM
+#' 
+#' @param model A `sparkLM` model object
+#' @param newData A SparkR DataFrame containing the observations you want to compute predictions for.
+#' @export
+#' @example
+#' \dontrun{
+#' class(theModel)
+#' > "sparkLM"
+#' predictedValues <- predict(theModel, newData)
+#' }
 predict.sparkLM <- function(model, newData) {
   if (class(newData) != "DataFrame") {
     stop("newData must be a Spark DataFrame.")
@@ -59,6 +99,19 @@ predict.sparkLM <- function(model, newData) {
   SparkR:::dataFrame(sdf)
 }
 
+#' @title SummaryObj
+#' @description Obtain the summary output from a `sparkLM` model and return it as an object.
+#' @rdname sparkLM
+#' 
+#' @param model A `sparkLM` model object
+#' @export
+#' @example
+#' \dontrun{
+#' modelSummary <- summaryObj(sparkLMModel)
+#' modelSummary$formula
+#' > Model:
+#' > y ~ x1 + x2 + x3
+#' }
 summaryObj.sparkLM <- function(model) {
   if (class(model) != "sparkLM") {
     stop("model must be a sparkLM model object.")
@@ -85,6 +138,13 @@ summaryObj.sparkLM <- function(model) {
   }
   summaryOut
 }
+
+#' @title Summary
+#' @description Print a summary of a `sparkLM` model object
+#' @rdname sparkLM
+#' 
+#' @param model A `sparkLM` model object
+#' @export
 summary.sparkLM <- function(model) {
   summary <- summaryObj(model)
   summary$printSummary()
