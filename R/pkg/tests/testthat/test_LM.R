@@ -5,7 +5,7 @@ context("LM class and functions")
 
 sc <- sparkR.init(sparkJars = "../../inst/sparkglm-assembly-0.0.1.jar")
 sqlCtx <- sparkRSQL.init(sc)
-irisDF <- createDataFrame(sqlCtx, iris)
+irisDF <- suppressWarnings(createDataFrame(sqlCtx, iris))
 
 model <- sparkLM(Sepal_Width ~ Petal_Length + Petal_Width + Species, irisDF)
 
