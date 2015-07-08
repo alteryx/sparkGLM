@@ -5,30 +5,31 @@ context("LM class and functions")
 
 sc <- sparkR.init(sparkJars = "../../inst/sparkglm-assembly-0.0.1.jar")
 sqlCtx <- sparkRSQL.init(sc)
-df <- read.df(sqlCtx, "../test_support/linear_reg_mixed.json", "json")
+irisDF <- createDataFrame(sqlCtx, iris)
+
+model <- sparkLM(Sepal_Width ~ Petal_Length + Petal_Width + Species, irisDF)
 
 test_that("lm with all numeric fields", {
-  numDF <- select(df, "x1", "x2", "x3", "y")
-  testModel <- sparkLM(y ~ x1 + x2 + x3, numDF)
+  testModel <- sparkLM(Sepal_Width ~ Petal_Length + Petal_Width, irisDF)
   expect_is(testModel, "sparkLM")
-  expect_equal(testModel$xnames, c("x1", "x2", "x3"))
+  expect_equal(testModel$xnames, c("Petal_Length", "Petal_Width"))
   # Create a new sparkLM obj from the jobj
   testModel2 <- sparkLM(testModel$jobj)
   expect_is(testModel2, "sparkLM")
+  expect_equal(testModel2$xnames, c("Petal_Length", "Petal_Width"))
 
-  predicted <- predict(testModel, select(numDF, "x1", "x2", "x3"))
+  predicted <- predict(testModel, select(irisDF, "Petal_Length", "Petal_Width"))
   expect_is(predicted, "DataFrame")
-  expect_equal(count(predicted), 1000)
+  expect_equal(count(predicted), 150)
 })
 
 test_that("lm with numeric and categorical fields", {
-  mixedDF <- select(df,"x1", "x2", "x7", "y")
-  testModel <- sparkLM(y ~ x1 + x2 + x7, mixedDF)
+  testModel <- sparkLM(Sepal_Width ~ Petal_Length + Petal_Width + Species, irisDF)
   expect_is(testModel, "sparkLM")
   expect_equal(length(testModel$xnames), 4)
-  expect_equal(testModel$xnames, c("x1", "x2", "x7_b", "x7_c"))
+  expect_equal(testModel$xnames, c("Petal_Length", "Petal_Width", "Species_versicolor", "Species_virginica"))
 
-  predicted <- predict(testModel, select(mixedDF, "x1", "x2", "x7"))
+  predicted <- predict(testModel, select(irisDF, "Petal_Length", "Petal_Width", "Species"))
   expect_is(predicted, "DataFrame")
-  expect_equal(count(predicted), 1000)
+  expect_equal(count(predicted), 150)
 })
