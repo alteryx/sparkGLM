@@ -22,6 +22,13 @@ import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions
 
+case class PreGLM(coefs: DenseMatrix[Double],
+                  stdErr: Array[Double],
+                  deviance: Double,
+                  nullDeviance: Double,
+                  loglik: Double,
+                  iter: Int)
+
 case class GLM(xnames: Array[String],
               yname: String,
               coefs: DenseMatrix[Double],
@@ -139,7 +146,6 @@ object GLM {
     new DenseMatrix(rows = eta.rows, cols = 1, unlinkRow)
   }
 
-
   ///// Complimentary log-log
   def linkCloglog(
       mu: DenseMatrix[Double],
@@ -152,9 +158,70 @@ object GLM {
     1.0 :/ ((mu :+ (-1.0 :* m)) :* breeze.numerics.log(1.0 :+ (-1.0 :* (mu :/ m))))
   }
   def unlinkCloglog(
-      y: DenseMatrix[Double],
       eta: DenseMatrix[Double],
       m: DenseMatrix[Double]): DenseMatrix[Double] = {
     m :* (1.0 :+ -1.0 :* breeze.numerics.exp(-breeze.numerics.exp(eta)))
+  }
+
+  ///// Fit for the binomial family
+  // ATTRIBUTES OF y CAN'T BE ACCESSED IN THE FUNCTION CALL SO IT WILL NEED TO
+  // BE ACCESSED FROM THE GLM FUNCTION CALL
+  def fitBinomialSingle(
+      y: DenseMatrix[Double],
+      X: DenseMatrix[Double],
+      link: String,
+      tol: Double = 1e-6,
+      offset: DenseMatrix[Double],
+      m: DenseMatrix[Double],
+      verbose: Boolean = false): PreGLM = {
+    // Initialize values
+    var mu = utils.repValue(sum(y(::, 0))/y.rows.toDouble, y.rows)
+    var eta = if(link == "logit"){
+        unlinkLogit(mu, m)
+      }else if(link == "probit"){
+        unlinkProbit(mu, m)
+      }else{
+        unlinkCloglog(mu, m)
+      }
+    var dev = devBinomial(y, mu, m)
+    val nullDev = dev
+    var devOld = dev
+    var deltad = 1.0
+    var iter = 0
+    var w = utils.repValue(1.0, y.rows)
+    var z = w
+    var grad = w
+    var mod = new utils.WLSObj(utils.repValue(0.0, 2), DenseVector(0.0, 0.0))
+    // The IRLS iterations
+    while(scala.math.abs(deltad) > tol){
+      grad = if(link == "logit"){
+          lPrimeLogit(mu, m)
+        }else if(link == "probit"){
+          lPrimeProbit(mu, m)
+        }else{
+          lPrimeCloglog(mu, m)
+        }
+      w = 1.0 :/ (varianceBinomial(mu, m) :* pow(grad, 2))
+      z = eta :+ (y :+ (-1.0 :* mu)) :* grad :+ (-1.0 :* offset)
+      mod = utils.wlsSingle(X, z, w)
+      eta = X * mod.coefs :+ offset
+      mu = if(link == "logit"){
+          unlinkLogit(eta, m)
+        }else if(link == "probit"){
+          unlinkProbit(eta, m)
+        }else{
+          unlinkCloglog(eta, m)
+        }
+      devOld = dev
+      dev = devBinomial(y, mu, m)
+      deltad = dev - devOld
+      iter = iter + 1
+      if(verbose) println(iter.toString + "\t" + deltad.toString)
+    }
+    // Calculate the model summary statistics
+    val stdError = breeze.numerics.sqrt(mod.diagDesign).toArray
+    val llRow = llBinomial(y, mu, m)
+    val ll = sum(llRow(::, 0))
+    new PreGLM(mod.coefs, stdError, dev, nullDev, ll, iter)
   }
 }
