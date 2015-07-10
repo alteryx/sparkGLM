@@ -99,11 +99,14 @@ predict.sparkLM <- function(model, newData) {
   SparkR:::dataFrame(sdf)
 }
 
-#' @title SummaryObj
-#' @description Obtain the summary output from a `sparkLM` model and return it as an object.
+#' Summarizing SparkLM Model Fits
+#' 
+#' 
+#' Obtain the summary output from a `sparkLM` model and return it as an object.
 #' @rdname sparkLM
 #' 
 #' @param model A `sparkLM` model object
+#' @param ... other arguments. currently not supported
 #' @export
 #' @example
 #' \dontrun{
@@ -112,40 +115,31 @@ predict.sparkLM <- function(model, newData) {
 #' > Model:
 #' > y ~ x1 + x2 + x3
 #' }
-summaryObj.sparkLM <- function(model) {
-  if (class(model) != "sparkLM") {
+summary.sparkLM <- function(object, ...) {
+  if (class(object) != "sparkLM") {
     stop("model must be a sparkLM model object.")
   }
   rawSummary <- SparkR:::callJStatic("com.Alteryx.sparkGLM.LM",
                                      "summaryArray",
                                      model$jobj)
-  summaryOut <- list()
-  summaryOut$model <- rawSummary[[1]]
-  summaryOut$coefficients <- rawSummary[[2]]
-  summaryOut$RSE <- rawSummary[[3]]
-  summaryOut$R2 <- rawSummary[[4]]
-  summaryOut$Fstat <- rawSummary[[5]]
-  summaryOut$printSummary <- function() {
-    cat("\nModel:\n")
-    cat(summaryOut$model)
-    cat("\n")
-    cat("\nCoefficients:\n")
-    cat(summaryOut$coefficients, "\n")
-    cat("\n")
-    for(i in c("RSE", "R2", "Fstat")) {
-      cat(summaryOut[[i]], "\n")
-    }
-  }
-  summaryOut
+  names(rawSummary) <- c('model', 'coefficients', 'RSE', 'R2', 'Fstat')
+  class(rawSummary) <- 'summary.sparkLM'
+  return(rawSummary)
 }
 
-#' @title Summary
-#' @description Print a summary of a `sparkLM` model object
-#' @rdname sparkLM
+
+#' Print method for sparkLM summary
 #' 
-#' @param model A `sparkLM` model object
+#' @param x object of class summary.sparkLM
 #' @export
-summary.sparkLM <- function(model) {
-  summary <- summaryObj(model)
-  summary$printSummary()
+print.summary.sparkLM <- function(x){
+   cat("\nModel:\n")
+   cat(x$model)
+   cat("\n")
+   cat("\nCoefficients:\n")
+   cat(x$coefficients, "\n")
+   cat("\n")
+   for(i in c("RSE", "R2", "Fstat")) {
+      cat(x[[i]], "\n")
+   }
 }
