@@ -37,9 +37,9 @@ sparkLM.formula <- function(formula, df, omitNAs = TRUE) {
   targetDF <- modelMatrix(select(df, pf$target))
   predDF <- modelMatrix(select(df, pf$predictors))
   theModelObj <- SparkR:::callJStatic("com.Alteryx.sparkGLM.LM",
-                                   "fit",
-                                   predDF@sdf,
-                                   targetDF@sdf)
+                                      "fit",
+                                      predDF@sdf,
+                                      targetDF@sdf)
   sparkLM(theModelObj, theCall)
 }
 
@@ -133,13 +133,13 @@ summary.sparkLM <- function(object, ...) {
 #' @param x object of class summary.sparkLM
 #' @export
 print.summary.sparkLM <- function(x){
-   cat("\nModel:\n")
-   cat(x$model)
-   cat("\n")
-   cat("\nCoefficients:\n")
-   cat(x$coefficients, "\n")
-   cat("\n")
-   for(i in c("RSE", "R2", "Fstat")) {
-      cat(x[[i]], "\n")
-   }
+  cat("\nCall:\n")
+  cat(x$call)
+  cat("\n")
+  cat("\nCoefficients:\n")
+  cat(x$coefficients, "\n")
+  cat("\n")
+  for(i in c("RSE", "R2", "Fstat")) {
+    cat(x[[i]], "\n")
+  }
 }
