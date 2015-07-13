@@ -7,7 +7,7 @@ NULL
 #' @description sparkLM is used to fit linear models in SparkR and is influenced heavily by R's `lm'
 #' function. It works seamlessly with SparkR DataFrames and returns an S3 object of class "sparkLM".
 #' @rdname sparkLM
-#' 
+#'
 #' @param formula An R formula (e.g. y ~ x1 + x2) specifying the parameters of your model.
 #' @param df A SparkR DataFrame containing your target field as well as any predictors you plan to
 #' include in the model.
@@ -19,7 +19,7 @@ NULL
 #' sc <- sparkR.init()
 #' sqlCtx <- sparkRSQL.init(sc)
 #' irisDF <- createDataFrame(iris)
-#' theModel <- sparkLM(Sepal.Length ~ Petal.Length + Petal.Width + Species)
+#' theModel <- sparkLM(Sepal.Length ~ Petal.Length + Petal.Width + Species, irisDF)
 #' }
 sparkLM.formula <- function(formula, df, omitNAs = TRUE) {
   if (class(formula) != "formula") {
@@ -45,7 +45,7 @@ sparkLM.formula <- function(formula, df, omitNAs = TRUE) {
 
 #' @rdname sparkLM
 #' @export
-#' 
+#'
 #' @param jobj A SparkR Java object
 #' @call The call used when constructing the model. If a call is included, it will be added to the
 #' resulting model object.
@@ -74,7 +74,7 @@ sparkLM.jobj <- function(jobj, call = NULL) {
 #' @title Predict
 #' @description Compute predicted values based on a model estimated with the `sparkLM` function.
 #' @rdname sparkLM
-#' 
+#'
 #' @param model A `sparkLM` model object
 #' @param newData A SparkR DataFrame containing the observations you want to compute predictions for.
 #' @export
@@ -100,12 +100,12 @@ predict.sparkLM <- function(model, newData) {
 }
 
 #' Summarizing SparkLM Model Fits
-#' 
-#' 
+#'
+#'
 #' Obtain the summary output from a `sparkLM` model and return it as an object.
 #' @rdname sparkLM
-#' 
-#' @param model A `sparkLM` model object
+#'
+#' @param object A `sparkLM` model object
 #' @param ... other arguments. currently not supported
 #' @export
 #' @example
@@ -129,7 +129,7 @@ summary.sparkLM <- function(object, ...) {
 
 
 #' Print method for sparkLM summary
-#' 
+#'
 #' @param x object of class summary.sparkLM
 #' @export
 print.summary.sparkLM <- function(x){
