@@ -119,12 +119,12 @@ summary.sparkLM <- function(object, ...) {
   if (class(object) != "sparkLM") {
     stop("model must be a sparkLM model object.")
   }
-  rawSummary <- SparkR:::callJStatic("com.Alteryx.sparkGLM.LM",
+  summaryOut <- SparkR:::callJStatic("com.Alteryx.sparkGLM.LM",
                                      "summaryArray",
-                                     model$jobj)
-  names(rawSummary) <- c('model', 'coefficients', 'RSE', 'R2', 'Fstat')
-  class(rawSummary) <- 'summary.sparkLM'
-  return(rawSummary)
+                                     object$jobj)
+  names(summaryOut) <- c('call', 'coefficients', 'RSE', 'R2', 'Fstat')
+  class(summaryOut) <- 'summary.sparkLM'
+  return(summaryOut)
 }
 
 
