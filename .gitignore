@@ -20,11 +20,11 @@ work/
 *.*~
 *~
 .Rproj.user
-SparkR-pkg.Rproj
+*.Rproj
 *.o
 *.so
 # Eclipse Meta Files
 .project
 .classpath
-sparkGLM_0.1.tar.gz
+*.tar.gz
 .idea
