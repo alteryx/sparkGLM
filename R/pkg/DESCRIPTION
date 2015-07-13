@@ -20,3 +20,4 @@ Collate:
     'test.R'
     'utils.R'
     'LM.R'
+    'zzz.R'
