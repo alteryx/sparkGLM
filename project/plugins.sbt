@@ -2,6 +2,6 @@
 
 resolvers += "Spark Packages repo" at "https://dl.bintray.com/spark-packages/maven/"
 
-// addSbtPlugin("org.spark-packages" %% "sbt-spark-package" % "0.2.0")
+addSbtPlugin("org.spark-packages" %% "sbt-spark-package" % "0.2.2")
 
-addSbtPlugin("org.spark-packages" %% "sbt-spark-package" % "0.2.3-SNAPSHOT")
+// addSbtPlugin("org.spark-packages" %% "sbt-spark-package" % "0.2.3-SNAPSHOT")
