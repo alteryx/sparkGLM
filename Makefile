@@ -5,7 +5,7 @@ FWDIR := $(patsubst %/,%,$(dir $(MAKEFILE_PATH)))
 LIB_DIR := $(FWDIR)/R/lib
 SCALA_VERSION := 2.10
 SPARKGLM_VERSION := 0.0.1
-JAR_NAME := sparkglm-assembly-$(SPARKGLM_VERSION).jar
+JAR_NAME := sparkGLM-assembly-$(SPARKGLM_VERSION).jar
 SBT_TARGET_NAME := target/scala-$(SCALA_VERSION)/$(JAR_NAME)
 
 SCALA_SOURCE_DIR := src/main/scala/com/Alteryx/sparkGLM
