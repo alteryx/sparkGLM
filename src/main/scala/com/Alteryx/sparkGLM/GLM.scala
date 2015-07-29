@@ -29,7 +29,9 @@ case class PreGLM(coefs: DenseMatrix[Double],
                   nullDeviance: Double,
                   pearson: Double,
                   loglik: Double,
-                  iter: Int)
+                  iter: Int,
+                  nrow: Double,
+                  npart: Int)
 
 case class GLM(xnames: Array[String],
               yname: String,
@@ -45,7 +47,9 @@ case class GLM(xnames: Array[String],
               family: String,
               link: String,
               aic: Double,
-              iter: Int)
+              iter: Int,
+              nrow: Double,
+              npart: Int)
 
 object GLM {
 
@@ -77,7 +81,9 @@ object GLM {
         family,
         link,
         aic,
-        pre.iter)
+        pre.iter,
+        pre.nrow,
+        pre.npart)
   }
   /// A method to calculate the pre-Pearson chi-square values
   def pearsonCalc(
@@ -270,7 +276,9 @@ object GLM {
     val pearson = sum(pearsonRow(::, 0))
     val llRow = llBinomial(ym, mu, m)
     val ll = sum(llRow(::, 0))
-    new PreGLM(mod.coefs, stdError, dev, nullDev, pearson, ll, iter)
+    val nrow = xm.rows.toDouble
+    val npart = 1
+    new PreGLM(mod.coefs, stdError, dev, nullDev, pearson, ll, iter, nrow, npart)
   }
 
 // The fit methods for the case of a single data partition
@@ -764,5 +772,35 @@ object GLM {
         fitSingle(y, x, offset, family, link, tol, m, verbose)
       }
     createObj(x, y, components, family, link)
+  }
+
+  // A summary method.
+  def summary(obj: GLM) = {
+    val dfNDev = obj.nrow.toInt - 1
+    val dfDev = obj.nrow.toInt - obj.xnames.size
+    val coefArray = obj.coefs.toArray
+    val zVals = coefArray.zip(obj.stdErr).map(x => x._1/x._2)
+    val pVals = zVals.map(x => 2.0*(1.0 - Gaussian(0.0, 1.0).cdf(scala.math.abs(x))))
+    var formula = obj.xnames(0)
+    for (i <- 1 to (obj.xnames.size - 1)) {
+      formula = formula + " + " + obj.xnames(i)
+    }
+    formula = obj.yname + " ~ " + formula
+    println("Model:")
+    println(formula)
+    println("Family: " + obj.family)
+    println("Link: " + obj.link)
+    println("\n")
+    println("Coefficients:")
+    println(String.format("%-12s %12s %12s %12s %12s", "", "Estimate", "Std. Error", "z value", "Pr(>|z|)"))
+    for (i <- 0 to (obj.xnames.size - 1)) {
+      println(String.format("%-12s %12s %12s %12s %12s",obj.xnames(i), utils.sigDigits(coefArray(i), 6).toString, utils.sigDigits(obj.stdErr(i), 6).toString, utils.sigDigits(zVals(i), 6).toString, utils.sigDigits(pVals(i), 6).toString))
+    }
+    println("\n")
+    println("Null deviance: " + utils.sigDigits(obj.nullDeviance, 6).toString + " on " + dfNDev.toString + " degress of freedom")
+    println("Residual deviance: " + utils.sigDigits(obj.deviance, 6).toString + " on " + dfDev.toString + " degress of freedom")
+    println("AIC: " + utils.sigDigits(obj.aic, 5).toString)
+    println("\n")
+    println("Number of Fisher Scoring iterations: " + obj.iter)
   }
 }

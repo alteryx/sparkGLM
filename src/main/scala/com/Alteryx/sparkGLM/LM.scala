@@ -2,6 +2,8 @@ package com.Alteryx.sparkGLM
 
 import breeze.linalg._
 import breeze.numerics._
+import breeze.stats.distributions._
+
 import edu.berkeley.cs.amplab.mlmatrix
 import edu.berkeley.cs.amplab.mlmatrix._
 import edu.berkeley.cs.amplab.mlmatrix.{NormalEquations, RowPartitionedMatrix}
@@ -222,6 +224,7 @@ object LM {
     val dfe = obj.nrow.toInt - obj.xnames.size
     val coefArray = obj.coefs.toArray
     val tVals = coefArray.zip(obj.stdErr).map(x => x._1/x._2)
+    val pVals = tVals.map(x => 2.0*(1.0 - StudentsT(dfe.toDouble).cdf(scala.math.abs(x))))
     var formula = obj.xnames(0)
     for (i <- 1 to (obj.xnames.size - 1)) {
       formula = formula + " + " + obj.xnames(i)
@@ -231,9 +234,9 @@ object LM {
     println(formula)
     println("\n")
     println("Coefficients:")
-    println(String.format("%-12s %12s %12s %12s", "", "Estimate", "Std. Error", "t value"))
+    println(String.format("%-12s %12s %12s %12s %12s", "", "Estimate", "Std. Error", "t value", "Pr(>|t|)"))
     for (i <- 0 to (obj.xnames.size - 1)) {
-      println(String.format("%-12s %12s %12s %12s",obj.xnames(i), utils.sigDigits(coefArray(i), 6).toString, utils.sigDigits(obj.stdErr(i), 6).toString, utils.sigDigits(tVals(i), 6).toString))
+      println(String.format("%-12s %12s %12s %12s %12s",obj.xnames(i), utils.sigDigits(coefArray(i), 6).toString, utils.sigDigits(obj.stdErr(i), 6).toString, utils.sigDigits(tVals(i), 6).toString, utils.sigDigits(pVals(i), 6).toString))
     }
     println("\n")
     println("Residual standard error: " + utils.sigDigits(obj.sigma, 6).toString + " on " + dfe.toString + " degress of freedom")
