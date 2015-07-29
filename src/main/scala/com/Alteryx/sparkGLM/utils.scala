@@ -162,6 +162,6 @@ object utils {
 
     def repValue(value: Double, nrow: Int): DenseMatrix[Double] = {
       require(nrow > 0, "The number of rows must be strictly greater than 0")
-      DenseVector.fill(nrow){value}.toDenseMatrix
+      DenseVector.fill(nrow){value}.toDenseMatrix.t
     }
 }

@@ -122,9 +122,9 @@ object GLM {
       y: DenseMatrix[Double],
       mu: DenseMatrix[Double],
       m: DenseMatrix[Double]): Double = {
-    val my = m :+ (-1.0 :* mu)
-    val rowValue = y :* breeze.numerics.log(max(y, 1.0) :/ mu) + my :* breeze.numerics.log(max(my, 1.0) :/ (m :+ (-1.0 :* mu)))
-    val deviance = (utils.repValue(1.0, rowValue.rows) * rowValue).toArray
+    val my = m :+ (-1.0 :* y)
+    val rowValue = (y :* breeze.numerics.log(max(y, 1.0) :/ mu)) :+ (my :* breeze.numerics.log(max(my, 1.0) :/ (m :+ (-1.0 :* mu))))
+    val deviance = (utils.repValue(1.0, rowValue.rows).t * rowValue).toArray
     2*deviance(0)
   }
 
@@ -159,7 +159,7 @@ object GLM {
   def unlinkLogit(
       eta: DenseMatrix[Double],
       m: DenseMatrix[Double]): DenseMatrix[Double] = {
-    m :/ (1.0 :+ breeze.numerics.exp(-eta))
+    m :/ (1.0 :+ breeze.numerics.exp(-1.0 :* eta))
   }
 
   ///// Probit
@@ -196,7 +196,7 @@ object GLM {
   def linkCloglog(
       mu: DenseMatrix[Double],
       m: DenseMatrix[Double]): DenseMatrix[Double] = {
-    breeze.numerics.log(-1.0 :* breeze.numerics.log(1.0 :+ -1.0 :* (mu :/ m)))
+    breeze.numerics.log(-1.0 :* breeze.numerics.log(1.0 :+ (-1.0 :* (mu :/ m))))
   }
   def lPrimeCloglog(
       mu: DenseMatrix[Double],
@@ -206,7 +206,7 @@ object GLM {
   def unlinkCloglog(
       eta: DenseMatrix[Double],
       m: DenseMatrix[Double]): DenseMatrix[Double] = {
-    m :* (1.0 :+ -1.0 :* breeze.numerics.exp(-breeze.numerics.exp(eta)))
+    m :* (1.0 :+ (-1.0 :* breeze.numerics.exp(-breeze.numerics.exp(eta))))
   }
 
   ///// Fit for the binomial family
@@ -221,11 +221,11 @@ object GLM {
     // Initialize values
     var mu = utils.repValue(sum(ym(::, 0))/ym.rows.toDouble, ym.rows)
     var eta = if(link == "logit"){
-        unlinkLogit(mu, m)
+        linkLogit(mu, m)
       }else if(link == "probit"){
-        unlinkProbit(mu, m)
+        linkProbit(mu, m)
       }else{
-        unlinkCloglog(mu, m)
+        linkCloglog(mu, m)
       }
     var dev = devBinomial(ym, mu, m)
     val nullDev = dev
@@ -246,7 +246,8 @@ object GLM {
           lPrimeCloglog(mu, m)
         }
       w = 1.0 :/ (varianceBinomial(mu, m) :* pow(grad, 2))
-      z = eta :+ (ym :+ (-1.0 :* mu)) :* grad :+ (-1.0 :* offset)
+      var yMmu = ym :+ (-1.0 :* mu)
+      z = eta :+ ((ym :+ (-1.0 :* mu)) :* grad) :+ (-1.0 :* offset)
       mod = utils.wlsSingle(xm, z, w)
       eta = xm * mod.coefs :+ offset
       mu = if(link == "logit"){
@@ -263,7 +264,8 @@ object GLM {
       if(verbose) println(iter.toString + "\t" + deltad.toString)
     }
     // Calculate the model summary statistics
-    val stdError = breeze.numerics.sqrt(mod.diagDesign).toArray
+//    val stdError = breeze.numerics.sqrt(mod.diagDesign).toArray
+    val stdError = mod.diagDesign.toArray
     val pearsonRow = pearsonCalc(ym, mu, m, "binomial")
     val pearson = sum(pearsonRow(::, 0))
     val llRow = llBinomial(ym, mu, m)
@@ -381,9 +383,9 @@ object GLM {
     val verbose = false
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, family, link, tol, verbose)
+        fitSingle(y, x, family, link, tol, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, family, link, tol, verbose)
+        fitSingle(y, x, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -406,9 +408,9 @@ object GLM {
     val verbose = false
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, offset, family, link, tol, verbose)
+        fitSingle(y, x, offset, family, link, tol, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, offset, family, link, tol, verbose)
+        fitSingle(y, x, offset, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -431,9 +433,9 @@ object GLM {
     val verbose = false
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -457,9 +459,9 @@ object GLM {
     val verbose = false
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, offset, family, link, tol, m, verbose)
+        fitSingle(y, x, offset, family, link, tol, m, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, offset, family, link, tol, m, verbose)
+        fitSingle(y, x, offset, family, link, tol, m, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -481,9 +483,9 @@ object GLM {
     val verbose = false
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, family, link, tol, verbose)
+        fitSingle(y, x, family, link, tol, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, family, link, tol, verbose)
+        fitSingle(y, x, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -506,9 +508,9 @@ object GLM {
     val verbose = false
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, offset, family, link, tol, verbose)
+        fitSingle(y, x, offset, family, link, tol, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, offset, family, link, tol, verbose)
+        fitSingle(y, x, offset, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -531,9 +533,9 @@ object GLM {
     val verbose = false
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -557,9 +559,9 @@ object GLM {
     val verbose = false
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -581,9 +583,9 @@ object GLM {
     val tol = 1e-6
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, family, link, tol, verbose)
+        fitSingle(y, x, family, link, tol, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, family, link, tol, verbose)
+        fitSingle(y, x, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -606,9 +608,9 @@ object GLM {
     val tol = 1e-6
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, offset, family, link, tol, verbose)
+        fitSingle(y, x, offset, family, link, tol, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, offset, family, link, tol, verbose)
+        fitSingle(y, x, offset, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -631,9 +633,9 @@ object GLM {
     val tol = 1e-6
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -657,9 +659,9 @@ object GLM {
     val tol = 1e-6
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, offset, family, link, tol, m, verbose)
+        fitSingle(y, x, offset, family, link, tol, m, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, offset, family, link, tol, m, verbose)
+        fitSingle(y, x, offset, family, link, tol, m, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -681,9 +683,9 @@ object GLM {
       "The 'y' DataFrame must have only one column")
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, family, link, tol, verbose)
+        fitSingle(y, x, family, link, tol, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, family, link, tol, verbose)
+        fitSingle(y, x, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -706,9 +708,9 @@ object GLM {
       "The 'y' DataFrame must have only one column")
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, offset, family, link, tol, verbose)
+        fitSingle(y, x, offset, family, link, tol, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, offset, family, link, tol, verbose)
+        fitSingle(y, x, offset, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -731,9 +733,9 @@ object GLM {
       "The 'y' DataFrame must have only one column")
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, family, link, tol, m, verbose)
+        fitSingle(y, x, family, link, tol, m, verbose)
       }
     createObj(x, y, components, family, link)
   }
@@ -757,9 +759,9 @@ object GLM {
       "The 'y' DataFrame must have only one column")
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
-        fitSingle(x, y, offset, family, link, tol, m, verbose)
+        fitSingle(y, x, offset, family, link, tol, m, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(x, y, offset, family, link, tol, m, verbose)
+        fitSingle(y, x, offset, family, link, tol, m, verbose)
       }
     createObj(x, y, components, family, link)
   }
