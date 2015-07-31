@@ -2,21 +2,9 @@ package com.Alteryx.sparkGLM
 
 import breeze.linalg._
 import breeze.numerics._
-import edu.berkeley.cs.amplab.mlmatrix
-import edu.berkeley.cs.amplab.mlmatrix._
-import edu.berkeley.cs.amplab.mlmatrix.{NormalEquations, RowPartitionedMatrix}
-import edu.berkeley.cs.amplab.mlmatrix.util.Utils
-import edu.berkeley.cs.amplab.mlmatrix.NormalEquations._
-
-import org.apache.spark.{SparkContext, SparkException}
-import org.apache.spark.SparkContext._
-import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel
-import org.apache.spark.util.Utils
-import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.{DataFrame, Row}
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.functions
+import breeze.stats.distributions.StudentsT
+import edu.berkeley.cs.amplab.mlmatrix.RowPartitionedMatrix
+import org.apache.spark.sql.DataFrame
 
 case class PreLM(coefs: DenseMatrix[Double],
                  xtxi: DenseMatrix[Double],
@@ -24,15 +12,128 @@ case class PreLM(coefs: DenseMatrix[Double],
                  r2: Double,
                  fStat: Double)
 
-case class LM(xnames: Array[String],
-              yname: String,
-              coefs: DenseMatrix[Double],
-              stdErr: Array[Double],
-              sigma: Double,
-              r2: Double,
-              fStat: Double,
-              nrow: Double,
-              npart: Int)
+class LM(
+  val xnames: Array[String],
+  val yname: String,
+  val coefs: DenseMatrix[Double],
+  val stdErr: Array[Double],
+  val sigma: Double,
+  val r2: Double,
+  val fStat: Double,
+  val nrow: Double,
+  val npart: Int) extends Serializable {
+
+  case class predicted(index: Int, value: Double)
+
+  def predict(newData: DataFrame): DataFrame = {
+    require(xnames.diff(newData.columns).size == 0,
+      "Not all predictors in the estimation data are in the data to be predicted")
+    if (newData.rdd.partitions.size == 1) {
+      predictSingle(newData)
+    } else {
+      this.predictMultiple(newData)
+    }
+  }
+
+  def predictSingle(newData: DataFrame): DataFrame = {
+    val newX = utils.dfToDenseMatrix(newData)
+    val predVals = (newX * coefs).toArray.zipWithIndex //This is an Array[(Double, Int)]
+    //Create an RDD[predicted(index, value)] with a single partition
+    val predRDD = newData.sqlContext.sparkContext.parallelize(
+        predVals.map { elem =>
+          predicted(elem._2, elem._1)
+        }, 1
+      )
+    //Create a DataFrame with schema inferred from `predicted` case class
+    newData.sqlContext.createDataFrame(predRDD)
+  }
+
+  def predictMultiple(newData: DataFrame): DataFrame = {
+    val newX = utils.dataFrameToMatrix(newData)
+    val predVals = newX.flatMap { elem =>
+      (elem * coefs).toArray
+    }.zipWithIndex //This is an RDD[Array[(Double, Long)]]
+    //Create a DataFrame with schema inferred from `predicted` case class
+    newData.sqlContext.createDataFrame(predVals.map { elem =>
+      predicted(elem._2.toInt, elem._1)
+    })
+  }
+
+  def summary: SummaryLM = new SummaryLM(this)
+}
+
+class SummaryLM(obj: LM) {
+
+  def adjR2: Double = {
+    1.0 - (((1.0 - obj.r2)*(obj.nrow - 1.0))/(obj.nrow - obj.xnames.size - 1.0))
+  }
+
+  def dfm: Double = {
+    obj.xnames.size - 1
+  }
+
+  def dfe: Double = {
+    obj.nrow.toInt - obj.xnames.size
+  }
+
+  def coefficients: Array[Double] = {
+    obj.coefs.toArray
+  }
+
+  def tVals: Array[Double] = {
+    coefficients.zip(obj.stdErr).map(x => x._1/x._2)
+  }
+
+  def pVals: Array[Double] = {
+    tVals.map(x => 2.0*(1.0 - StudentsT(dfe.toDouble).cdf(scala.math.abs(x))))
+  }
+
+  def formula: String = {
+    var formula = obj.xnames(0)
+    for (i <- 1 to (obj.xnames.size - 1)) {
+      formula = formula + " + " + obj.xnames(i)
+    }
+    obj.yname + " ~ " + formula
+  }
+
+  def coefsString: String = {
+    val header = String.format("%-12s %12s %12s %12s %12s", "", "Estimate", "Std. Error", "t value", "Pr(>|t|)")
+    var formatted = new Array[String](obj.xnames.size)
+    for (i <- 0 to (obj.xnames.size - 1)) {
+      formatted(i) = String.format("%-12s %12s %12s %12s %12s",
+        obj.xnames(i),
+        utils.sigDigits(coefficients(i), 6).toString,
+        utils.sigDigits(obj.stdErr(i), 6).toString,
+        utils.sigDigits(tVals(i), 6).toString,
+        utils.sigDigits(pVals(i), 6).toString)
+    }
+    (header +: formatted).reduce { (acc, elem) =>
+      acc + "\n" + elem
+    }
+  }
+
+  def RSEString: String = {
+    "Residual standard error: " + utils.sigDigits(obj.sigma, 6).toString + " on " + dfe.toString + " degrees of freedom"
+  }
+
+  def R2String: String = {
+    "Multiple R-Squared: " + utils.roundDigits(obj.r2, 4).toString + ", Adusted R-Squared: " + utils.roundDigits(adjR2, 4).toString
+  }
+
+  def FStatString: String = {
+    "F-statistic: " + utils.sigDigits(obj.fStat, 5).toString + " on " + dfm.toString + " and " + dfe.toString + " DF"
+  }
+
+  def print(): Unit = {
+    println("Model:")
+    println(formula + "\n")
+    println("Coefficients:")
+    println(coefsString + "\n")
+    println(RSEString + "\n")
+    println(R2String + "\n")
+    println(FStatString + "\n")
+  }
+}
 
 object LM {
 
@@ -169,90 +270,5 @@ object LM {
         fStat = fStat,
         nrow = nrow,
         npart = npart)
-  }
-
-  // A predict method for LM objects
-  // TODO: it needs error checking, and it will need to be able to address
-  // DataFrames with more than one partition
-  case class predicted(index: Int, value: Double)
-
-  def predict(obj: LM, newData: DataFrame): DataFrame = {
-    require(obj.xnames.diff(newData.columns).size == 0,
-       "Not all predictors in the estimation data are in the data to be predicted")
-    if (newData.rdd.partitions.size == 1) {
-      predictSingle(obj, newData)
-    } else {
-      predictMultiple(obj, newData)
-    }
-  }
-
-  def predictSingle(obj: LM, newData: DataFrame): DataFrame = {
-    val newX = utils.dfToDenseMatrix(newData)
-    val predVals = (newX * obj.coefs).toArray.zipWithIndex //This is an Array[(Double, Int)]
-    //Create an RDD[predicted(index, value)] with a single partition
-    val predRDD = newData.sqlContext.sparkContext.parallelize(
-      predVals.map {elem =>
-        predicted(elem._2, elem._1)
-      }, 1
-    )
-    //Create a DataFrame with schema inferred from `predicted` case class
-    newData.sqlContext.createDataFrame(predRDD)
-  }
-
-  def predictMultiple(obj: LM, newData: DataFrame): DataFrame = {
-    val newX = utils.dataFrameToMatrix(newData)
-    val predVals = newX.flatMap { elem =>
-      (elem * obj.coefs).toArray
-    }.zipWithIndex //This is an RDD[Array[(Double, Long)]]
-    //Create a DataFrame with schema inferred from `predicted` case class
-    newData.sqlContext.createDataFrame(predVals.map{ elem =>
-      predicted(elem._2.toInt, elem._1)
-    })
-  }
-
-  // TODO: Create a summary method for printing model output.
-  // NOTE: Hold off. There is no good way to get summary statistics since distributions
-  // for getting p-values from various distributions don't really exist. There seems
-  // to be a way to get a chi-square statistic via MLlib, but we aren't sure what
-  // is being called under the hood. Likely the Apache Commons Java Math classes.
-  // Actually, no: val pValue = 1 - StudentsT(200.0).cdf(1.9)
-  def summaryArray(obj: LM): Array[String] = {
-    val adjR2 = 1.0 - (((1.0 - obj.r2)*(obj.nrow - 1.0))/(obj.nrow - obj.xnames.size - 1.0))
-    val dfm = obj.xnames.size - 1
-    val dfe = obj.nrow.toInt - obj.xnames.size
-    val coefArray = obj.coefs.toArray
-    val tVals = coefArray.zip(obj.stdErr).map(x => x._1/x._2)
-    var formula = obj.xnames(0)
-    for (i <- 1 to (obj.xnames.size - 1)) {
-      formula = formula + " + " + obj.xnames(i)
-    }
-    formula = obj.yname + " ~ " + formula
-
-    val header = String.format("%-12s %12s %12s %12s", "", "Estimate", "Std. Error", "t value")
-    var coefArrFormatted = new Array[String](obj.xnames.size)
-    for (i <- 0 to (obj.xnames.size - 1)) {
-      coefArrFormatted(i) = String.format("%-12s %12s %12s %12s",obj.xnames(i), utils.sigDigits(coefArray(i), 6).toString, utils.sigDigits(obj.stdErr(i), 6).toString, utils.sigDigits(tVals(i), 6).toString)
-    }
-    val coefficients = (header +: coefArrFormatted).reduce { (acc, elem) =>
-      acc + "\n" + elem
-    }
-    val RSE = "Residual standard error: " + utils.sigDigits(obj.sigma, 6).toString + " on " + dfe.toString + " degrees of freedom"
-    val R2 = "Multiple R-Squared: " + utils.roundDigits(obj.r2, 4).toString + ", Adusted R-Squared: " + utils.roundDigits(adjR2, 4).toString
-    val Fstat = "F-statistic: " + utils.sigDigits(obj.fStat, 5).toString + " on " + dfm.toString + " and " + dfe.toString + " DF"
-
-    Array(formula,
-          coefficients,
-          RSE,
-          R2,
-          Fstat)
-  }
-
-  def summary(obj: LM): Unit = {
-    val rawSummary = summaryArray(obj)
-    println("Model:")
-    println(rawSummary(0) + "\n")
-    println("Coefficients:")
-    println(rawSummary(1) + "\n")
-    rawSummary.slice(2, 5).foreach(x => println(x))
   }
 }
