@@ -225,6 +225,8 @@ object LM {
     val coefArray = obj.coefs.toArray
     val tVals = coefArray.zip(obj.stdErr).map(x => x._1/x._2)
     val pVals = tVals.map(x => 2.0*(1.0 - StudentsT(dfe.toDouble).cdf(scala.math.abs(x))))
+    val pFa = new FDistribution(dfm.toDouble, dfe.toDouble)
+    val pF = 1.0 - pFa.cdf(obj.fStat)
     var formula = obj.xnames(0)
     for (i <- 1 to (obj.xnames.size - 1)) {
       formula = formula + " + " + obj.xnames(i)
@@ -241,6 +243,6 @@ object LM {
     println("\n")
     println("Residual standard error: " + utils.sigDigits(obj.sigma, 6).toString + " on " + dfe.toString + " degress of freedom")
     println("Multiple R-Squared: " + utils.roundDigits(obj.r2, 4).toString + ", Adusted R-Squared: " + utils.roundDigits(adjR2, 4).toString)
-    println("F-statistic: " + utils.sigDigits(obj.fStat, 5).toString + " on " + dfm.toString + " and " + dfe.toString + " DF")
+    println("F-statistic: " + utils.sigDigits(obj.fStat, 5).toString + " on " + dfm.toString + " and " + dfe.toString + " DF, p-value: " + utils.sigDigits(pF, 4).toString)
   }
 }
