@@ -36,10 +36,10 @@ test_that("lm with numeric and categorical fields", {
 
 test_that("sparkLM summary", {
   testModel <- sparkLM(Sepal_Width ~ Petal_Length + Petal_Width + Species, irisDF)
-  testSummary <- summaryObj(testModel)
-  expect_is(testSummary, "list")
-  expect_equal(length(testSummary), 6)
-  expect_equal(names(testSummary), c("model", "coefficients", "RSE", "R2", "Fstat", "printSummary"))
-  expect_equivalent(testSummary$model, c("Sepal_Width ~ Petal_Length + Petal_Width + Species_versicolor + Species_virginica"))
+  testSummary <- summary(testModel)
+  expect_is(testSummary, "summary.sparkLM")
+  expect_equal(length(testSummary), 5)
+  expect_equal(names(testSummary), c("call", "coefficients", "RSE", "R2", "Fstat"))
+  expect_equivalent(testSummary$call, c("Sepal_Width ~ Petal_Length + Petal_Width + Species_versicolor + Species_virginica"))
   expect_equivalent(testSummary$R2, c("Multiple R-Squared: 3.8443, Adusted R-Squared: 3.9228"))
 })
