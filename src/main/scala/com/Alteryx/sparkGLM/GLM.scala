@@ -51,6 +51,8 @@ case class GLM(xnames: Array[String],
               nrow: Double,
               npart: Int)
 
+case class ZWobj(z: RowPartitionedMatrix, w: RowPartitionedMatrix)
+
 object GLM {
 
   // Summary methods that are minimally related to the choice of family
@@ -252,10 +254,9 @@ object GLM {
           lPrimeCloglog(mu, m)
         }
       w = 1.0 :/ (varianceBinomial(mu, m) :* pow(grad, 2))
-      var yMmu = ym :+ (-1.0 :* mu)
       z = eta :+ ((ym :+ (-1.0 :* mu)) :* grad) :+ (-1.0 :* offset)
       mod = utils.wlsSingle(xm, z, w)
-      eta = xm * mod.coefs :+ offset
+      eta = (xm * mod.coefs) :+ offset
       mu = if(link == "logit"){
           unlinkLogit(eta, m)
         }else if(link == "probit"){
@@ -270,7 +271,6 @@ object GLM {
       if(verbose) println(iter.toString + "\t" + deltad.toString)
     }
     // Calculate the model summary statistics
-//    val stdError = breeze.numerics.sqrt(mod.diagDesign).toArray
     val stdError = mod.diagDesign.toArray
     val pearsonRow = pearsonCalc(ym, mu, m, "binomial")
     val pearson = sum(pearsonRow(::, 0))
@@ -279,6 +279,45 @@ object GLM {
     val nrow = xm.rows.toDouble
     val npart = 1
     new PreGLM(mod.coefs, stdError, dev, nullDev, pearson, ll, iter, nrow, npart)
+  }
+
+
+  // a method that calculates the new weights and z values for the binomial
+  // family. NOTE: Currently there are issues associated with an offset
+  def zwCreateBinomial(
+      ym: RowPartitionedMatrix,
+      m: RowPartitionedMatrix,
+      eta: RowPartitionedMatrix,
+      offset: RowPartitionedMatrix,
+      link: String): ZWobj = {
+    val yme = ym.rdd.zip(m.rdd).zip(eta.rdd).map {
+      case((a, b), c) => (a.mat, b.mat, c.mat)
+    }
+    val theObj = if(link == "logit") {
+      yme.map { part =>
+        (part._3 :+ ((part._1 :+ (-1.0 :* unlinkLogit(part._3, part._2))) :* lPrimeLogit(part._3, part._2)));
+        (1.0 :/ (varianceBinomial(unlinkLogit(part._3, part._2), part._2) :* pow(lPrimeLogit(part._3, part._2), 2)))
+      }
+    }else if(link == "probit") {
+      yme.map { part =>
+        (part._3 :+ ((part._1 :+ (-1.0 :* unlinkProbit(part._3, part._2))) :* lPrimeProbit(part._3, part._2)));
+        (1.0 :/ (varianceBinomial(unlinkProbit(part._3, part._2), part._2) :* pow(lPrimeProbit(part._3, part._2), 2)))
+      }
+    }else{
+      yme.map { part =>
+        (part._3 :+ ((part._1 :+ (-1.0 :* unlinkCloglog(part._3, part._2))) :* lPrimeCloglog(part._3, part._2)));
+        (1.0 :/ (varianceBinomial(unlinkCloglog(part._3, part._2), part._2) :* pow(lPrimeCloglog(part._3, part._2), 2)))
+      }
+    }
+    val z0 = RowPartitionedMatrix.fromMatrix(theObj.map(x => x(::, 0).toDenseMatrix))
+    val zOffset = z0.rdd.zip(offset.rdd).map {
+      case(a, b) => (a.mat, b.mat)
+    }
+    val z1 = zOffset.map { part =>
+      part._1 :+ (-1.0 :* part._2)
+    }
+    val w = theObj.map( x => x(::, 1).toDenseMatrix)
+    new ZWobj(RowPartitionedMatrix.fromMatrix(z1), RowPartitionedMatrix.fromMatrix(w))
   }
 
 // The fit methods for the case of a single data partition

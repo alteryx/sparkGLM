@@ -46,12 +46,11 @@ object LM {
     val XtX_Xty = XY.map { part =>
       (part._1.t * part._1, part._1.t * part._2)
     }
+    val treeBranchingFactor = X.rdd.context.getConf.getInt("spark.mlmatrix.treeBranchingFactor", 2).toInt
+    val depth = math.ceil(math.log(XtX_Xty.partitions.size)/math.log(treeBranchingFactor)).toInt
+    val reduced = edu.berkeley.cs.amplab.mlmatrix.util.Utils.treeReduce(XtX_Xty, utils.reduceNormal, depth=depth)
 
-      val treeBranchingFactor = X.rdd.context.getConf.getInt("spark.mlmatrix.treeBranchingFactor", 2).toInt
-      val depth = math.ceil(math.log(XtX_Xty.partitions.size)/math.log(treeBranchingFactor)).toInt
-      val reduced = edu.berkeley.cs.amplab.mlmatrix.util.Utils.treeReduce(XtX_Xty, utils.reduceNormal, depth=depth)
-
-      reduced
+    reduced
   }
 
 
