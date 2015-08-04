@@ -101,6 +101,24 @@ object GLM {
     pow((y :+ (-1.0 :* mu)), 2.0) :/ variance
   }
 
+  /// Extending the Pearson calculation to partioned data
+  def pearsonCalcMultiple(
+      ym: RowPartitionedMatrix,
+      mu: RowPartitionedMatrix,
+      m: RowPartitionedMatrix,
+      family: String): Double = {
+    val ymum = ym.rdd.zip(mu.rdd).zip(m.rdd).map {
+      case((a, b), c) => (a.mat, b.mat, c.mat)
+    }
+    val pearsonRows1 = ymum.map { part =>
+      pearsonCalc(part._1, part._2, part._3, family = family)
+    }
+    val pearsonRows = RowPartitionedMatrix.fromMatrix(pearsonRows1)
+    val pearsonSums = pearsonRows.rdd.map( x => sum(x.mat(::, 0)))
+    pearsonSums.collect.reduce(_+_)
+  }
+
+
   // Family and link methods
   /// Family specific methods
   //// Binomial
@@ -123,6 +141,22 @@ object GLM {
       x => Array(Binomial(x(0).toInt, x(1)).logProbabilityOf(x(2).toInt))
     }.map(y => y(0))
     new DenseMatrix(rows = y.rows, cols = 1, ll)
+  }
+
+  /// Extending the binomial ll calculation to partioned data
+  def llBinomialMultiple(
+      ym: RowPartitionedMatrix,
+      mu: RowPartitionedMatrix,
+      m: RowPartitionedMatrix): Double = {
+    val ymum = ym.rdd.zip(mu.rdd).zip(m.rdd).map {
+      case((a, b), c) => (a.mat, b.mat, c.mat)
+    }
+    val ll1 = ymum.map { part =>
+      llBinomial(part._1, part._2, part._3)
+    }
+    val ll = RowPartitionedMatrix.fromMatrix(ll1)
+    val llSums = ll.rdd.map( x => sum(x.mat(::, 0)))
+    llSums.collect.reduce(_+_)
   }
 
   //// Binomial deviance
@@ -281,9 +315,48 @@ object GLM {
     new PreGLM(mod.coefs, stdError, dev, nullDev, pearson, ll, iter, nrow, npart)
   }
 
+  // A method that calutes eta (the linear predictor) for partiioned data.
+  // This is used within IRLS iterations, the initial value of eta is
+  // calculated directly from the data.
+  // This will likely be the start of a predict method for partioned data.
+  def etaCreate(
+      xm: RowPartitionedMatrix,
+      offset: RowPartitionedMatrix,
+      coefs: DenseMatrix[Double]): RowPartitionedMatrix = {
+    val xmOffset = xm.rdd.zip(offset.rdd).map {
+      case(a, b) => (a.mat, b.mat)
+    }
+    val eta = xmOffset.map { part =>
+      (part._1 * coefs) :+ part._2
+    }
+    RowPartitionedMatrix.fromMatrix(eta)
+  }
 
-  // a method that calculates the new weights and z values for the binomial
-  // family. NOTE: Currently there are issues associated with an offset
+  def muCreate(
+      eta: RowPartitionedMatrix,
+      m: RowPartitionedMatrix,
+      link: String): RowPartitionedMatrix = {
+    val etaM = eta.rdd.zip(m.rdd).map {
+      case(a, b) => (a.mat, b.mat)
+    }
+    val mu = if(link == "logit") {
+      etaM.map { part =>
+        unlinkLogit(part._1, part._2)
+      }
+    }else if(link == "probit") {
+      etaM.map { part =>
+        unlinkProbit(part._1, part._2)
+      }
+    }else{
+      etaM.map { part =>
+        unlinkCloglog(part._1, part._2)
+      }
+    }
+    RowPartitionedMatrix.fromMatrix(mu)
+  }
+
+  // A method that calculates the new weights and z values for the binomial
+  // family.
   def zwCreateBinomial(
       ym: RowPartitionedMatrix,
       m: RowPartitionedMatrix,
@@ -318,6 +391,81 @@ object GLM {
     }
     val w = theObj.map( x => x(::, 1).toDenseMatrix)
     new ZWobj(RowPartitionedMatrix.fromMatrix(z1), RowPartitionedMatrix.fromMatrix(w))
+  }
+
+  def createBinomialDeviance(
+      ym: RowPartitionedMatrix,
+      mu: RowPartitionedMatrix,
+      m: RowPartitionedMatrix): Double = {
+    val ymum = ym.rdd.zip(mu.rdd).zip(m.rdd).map {
+      case((a, b), c) => (a.mat, b.mat, c.mat)
+    }
+    val partDev = ymum.map { part =>
+      devBinomial(part._1, part._2, part._3)
+    }
+    partDev.collect.reduce(_+_)
+  }
+
+  def fitMultipleBinomial(
+      ym: RowPartitionedMatrix,
+      xm: RowPartitionedMatrix,
+      uno: RowPartitionedMatrix,
+      link: String,
+      tol: Double = 1e-6,
+      offset: RowPartitionedMatrix,
+      m: RowPartitionedMatrix,
+      verbose: Boolean = false): PreGLM = {
+    // Initialize values
+    val ySums = ym.rdd.map(y => sum(y.mat(::, 0)))
+    val nrow = ym.getDim._1
+    val npart = xm.rdd.partitions.size
+    val yMean = (ySums.collect.reduce(_+_))/nrow.toDouble
+    val mu1 = uno.rdd.map {part => yMean :* part.mat}
+    var mu = RowPartitionedMatrix.fromMatrix(mu1)
+    val muM = mu.rdd.zip(m.rdd).map {
+      case(a, b) => (a.mat, b.mat)
+    }
+    var eta1 = if(link == "logit"){
+        muM.map { part =>
+          linkLogit(part._1, part._2)
+        }
+      }else if(link == "probit"){
+        muM.map { part =>
+          linkProbit(part._1, part._2)
+        }
+      }else{
+        muM.map { part =>
+          linkCloglog(part._1, part._2)
+        }
+      }
+    var eta = RowPartitionedMatrix.fromMatrix(eta1)
+    var dev = createBinomialDeviance(ym, mu, m)
+    val nullDev = dev
+    var devOld = dev
+    var deltad = 1.0
+    var iter = 0
+    var zw = new ZWobj(z = uno, w = uno)
+    var grad = uno
+    var mod = new utils.WLSObj(utils.repValue(0.0, 2), DenseVector(0.0, 0.0))
+    // The IRLS iterations
+    while(scala.math.abs(deltad) > tol){
+      zw = zwCreateBinomial(ym, m, eta, offset, link)
+      mod = utils.wlsMultiple(xm, zw.z, zw.w)
+      eta = etaCreate(xm, offset, mod.coefs)
+      mu = muCreate(eta, m, link)
+      devOld = dev
+      dev = createBinomialDeviance(ym, mu, m)
+      deltad = dev - devOld
+      iter = iter + 1
+      if(verbose) println(iter.toString + "\t" + deltad.toString)
+    }
+    // Calculate the model summary statistics
+    val stdError = mod.diagDesign.toArray
+    val pearson = pearsonCalcMultiple(ym, mu, m, "binomial")
+//    val pearson = sum(pearsonRow(::, 0))
+//    val llRow = llBinomial(ym, mu, m)
+    val ll = llBinomialMultiple(ym, mu, m)
+    new PreGLM(mod.coefs, stdError, dev, nullDev, pearson, ll, iter, nrow, npart)
   }
 
 // The fit methods for the case of a single data partition
