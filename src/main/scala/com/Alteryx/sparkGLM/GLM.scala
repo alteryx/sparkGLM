@@ -17,10 +17,9 @@ import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.Utils
-import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{SQLContext, DataFrame, Column, Row}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.functions
+import org.apache.spark.sql.functions._
 
 
 case class PreGLM(coefs: DenseMatrix[Double],
@@ -98,7 +97,7 @@ object GLM {
       }else{
         varianceBinomial(mu, m)
       }
-    pow((y :+ (-1.0 :* mu)), 2.0) :/ variance
+    breeze.numerics.pow((y :+ (-1.0 :* mu)), 2.0) :/ variance
   }
 
   /// Extending the Pearson calculation to partioned data
@@ -114,7 +113,7 @@ object GLM {
       pearsonCalc(part._1, part._2, part._3, family = family)
     }
     val pearsonRows = RowPartitionedMatrix.fromMatrix(pearsonRows1)
-    val pearsonSums = pearsonRows.rdd.map( x => sum(x.mat(::, 0)))
+    val pearsonSums = pearsonRows.rdd.map( x => breeze.linalg.sum(x.mat(::, 0)))
     pearsonSums.collect.reduce(_+_)
   }
 
@@ -155,7 +154,7 @@ object GLM {
       llBinomial(part._1, part._2, part._3)
     }
     val ll = RowPartitionedMatrix.fromMatrix(ll1)
-    val llSums = ll.rdd.map( x => sum(x.mat(::, 0)))
+    val llSums = ll.rdd.map( x => breeze.linalg.sum(x.mat(::, 0)))
     llSums.collect.reduce(_+_)
   }
 
@@ -165,7 +164,7 @@ object GLM {
       mu: DenseMatrix[Double],
       m: DenseMatrix[Double]): Double = {
     val my = m :+ (-1.0 :* y)
-    val rowValue = (y :* breeze.numerics.log(max(y, 1.0) :/ mu)) :+ (my :* breeze.numerics.log(max(my, 1.0) :/ (m :+ (-1.0 :* mu))))
+    val rowValue = (y :* breeze.numerics.log(breeze.linalg.max(y, 1.0) :/ mu)) :+ (my :* breeze.numerics.log(breeze.linalg.max(my, 1.0) :/ (m :+ (-1.0 :* mu))))
     val deviance = (utils.repValue(1.0, rowValue.rows).t * rowValue).toArray
     2*deviance(0)
   }
@@ -261,7 +260,7 @@ object GLM {
       m: DenseMatrix[Double],
       verbose: Boolean = false): PreGLM = {
     // Initialize values
-    var mu = utils.repValue(sum(ym(::, 0))/ym.rows.toDouble, ym.rows)
+    var mu = utils.repValue(breeze.linalg.sum(ym(::, 0))/ym.rows.toDouble, ym.rows)
     var eta = if(link == "logit"){
         linkLogit(mu, m)
       }else if(link == "probit"){
@@ -287,7 +286,7 @@ object GLM {
         }else{
           lPrimeCloglog(mu, m)
         }
-      w = 1.0 :/ (varianceBinomial(mu, m) :* pow(grad, 2))
+      w = 1.0 :/ (varianceBinomial(mu, m) :* breeze.numerics.pow(grad, 2))
       z = eta :+ ((ym :+ (-1.0 :* mu)) :* grad) :+ (-1.0 :* offset)
       mod = utils.wlsSingle(xm, z, w)
       eta = (xm * mod.coefs) :+ offset
@@ -307,9 +306,9 @@ object GLM {
     // Calculate the model summary statistics
     val stdError = mod.diagDesign.toArray
     val pearsonRow = pearsonCalc(ym, mu, m, "binomial")
-    val pearson = sum(pearsonRow(::, 0))
+    val pearson = breeze.linalg.sum(pearsonRow(::, 0))
     val llRow = llBinomial(ym, mu, m)
-    val ll = sum(llRow(::, 0))
+    val ll = breeze.linalg.sum(llRow(::, 0))
     val nrow = xm.rows.toDouble
     val npart = 1
     new PreGLM(mod.coefs, stdError, dev, nullDev, pearson, ll, iter, nrow, npart)
@@ -369,17 +368,17 @@ object GLM {
     val theObj = if(link == "logit") {
       yme.map { part =>
         (part._3 :+ ((part._1 :+ (-1.0 :* unlinkLogit(part._3, part._2))) :* lPrimeLogit(part._3, part._2)));
-        (1.0 :/ (varianceBinomial(unlinkLogit(part._3, part._2), part._2) :* pow(lPrimeLogit(part._3, part._2), 2)))
+        (1.0 :/ (varianceBinomial(unlinkLogit(part._3, part._2), part._2) :* breeze.numerics.pow(lPrimeLogit(part._3, part._2), 2)))
       }
     }else if(link == "probit") {
       yme.map { part =>
         (part._3 :+ ((part._1 :+ (-1.0 :* unlinkProbit(part._3, part._2))) :* lPrimeProbit(part._3, part._2)));
-        (1.0 :/ (varianceBinomial(unlinkProbit(part._3, part._2), part._2) :* pow(lPrimeProbit(part._3, part._2), 2)))
+        (1.0 :/ (varianceBinomial(unlinkProbit(part._3, part._2), part._2) :* breeze.numerics.pow(lPrimeProbit(part._3, part._2), 2)))
       }
     }else{
       yme.map { part =>
         (part._3 :+ ((part._1 :+ (-1.0 :* unlinkCloglog(part._3, part._2))) :* lPrimeCloglog(part._3, part._2)));
-        (1.0 :/ (varianceBinomial(unlinkCloglog(part._3, part._2), part._2) :* pow(lPrimeCloglog(part._3, part._2), 2)))
+        (1.0 :/ (varianceBinomial(unlinkCloglog(part._3, part._2), part._2) :* breeze.numerics.pow(lPrimeCloglog(part._3, part._2), 2)))
       }
     }
     val z0 = RowPartitionedMatrix.fromMatrix(theObj.map(x => x(::, 0).toDenseMatrix))
@@ -416,7 +415,7 @@ object GLM {
       m: RowPartitionedMatrix,
       verbose: Boolean = false): PreGLM = {
     // Initialize values
-    val ySums = ym.rdd.map(y => sum(y.mat(::, 0)))
+    val ySums = ym.rdd.map(y => breeze.linalg.sum(y.mat(::, 0)))
     val nrow = ym.getDim._1
     val npart = xm.rdd.partitions.size
     val yMean = (ySums.collect.reduce(_+_))/nrow.toDouble
@@ -462,8 +461,6 @@ object GLM {
     // Calculate the model summary statistics
     val stdError = mod.diagDesign.toArray
     val pearson = pearsonCalcMultiple(ym, mu, m, "binomial")
-//    val pearson = sum(pearsonRow(::, 0))
-//    val llRow = llBinomial(ym, mu, m)
     val ll = llBinomialMultiple(ym, mu, m)
     new PreGLM(mod.coefs, stdError, dev, nullDev, pearson, ll, iter, nrow, npart)
   }
@@ -559,6 +556,40 @@ object GLM {
     }
 
 
+    // The fit methods for the case of a multiple data partitions
+    /// The case of no provided offset or group sizes
+      def fitMultiple(
+          y: DataFrame,
+          x: DataFrame,
+          family: String,
+          link: String,
+          tol: Double,
+          verbose: Boolean): PreGLM = {
+        // Construct the "uno" field", a field of 1.0 values that maintains
+        // the data partitioning, and be used as the bases for creating
+        // needed initial values in the GLM algorithm
+        val yUno = y.withColumn("Uno", lit(1).cast(DoubleType))
+        val uno1 = yUno.select("Uno")
+        // Convert the DataFrames to RowPartitionedMatrix objects
+        val xm = RowPartitionedMatrix.fromMatrix(utils.dataFrameToMatrix(x))
+        val ym = RowPartitionedMatrix.fromMatrix(utils.dataFrameToMatrix(y))
+        val uno = RowPartitionedMatrix.fromMatrix(utils.dataFrameToMatrix(uno1))
+        // The default group sizes
+        val m = uno
+        // The default offsets
+        val offset1 = uno.rdd.map { part =>
+          0.0 :* part.mat
+        }
+        val offset = RowPartitionedMatrix.fromMatrix(offset1)
+        val components = if (family == "Binomial") {
+            fitMultipleBinomial(ym, xm, uno, link, tol, offset, m, verbose)
+          }else{
+            fitMultipleBinomial(ym, xm, uno, link, tol, offset, m, verbose)
+          }
+        components
+      }
+
+
   // The main fit methods
   /// No offset, group size, tolerence, or verbose provided
   def fit(
@@ -580,7 +611,7 @@ object GLM {
     val components = if (npart == 1) {
         fitSingle(y, x, family, link, tol, verbose)
       }else{ // Will change to fitDouble
-        fitSingle(y, x, family, link, tol, verbose)
+        fitMultiple(y, x, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
   }
