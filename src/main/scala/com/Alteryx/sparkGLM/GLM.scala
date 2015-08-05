@@ -367,28 +367,30 @@ object GLM {
     }
     val theObj = if(link == "logit") {
       yme.map { part =>
-        (part._3 :+ ((part._1 :+ (-1.0 :* unlinkLogit(part._3, part._2))) :* lPrimeLogit(part._3, part._2)));
-        (1.0 :/ (varianceBinomial(unlinkLogit(part._3, part._2), part._2) :* breeze.numerics.pow(lPrimeLogit(part._3, part._2), 2)))
+        ((part._3 :+ ((part._1 :+ (-1.0 :* unlinkLogit(part._3, part._2))) :* lPrimeLogit(unlinkLogit(part._3, part._2), part._2))),
+        (1.0 :/ (varianceBinomial(unlinkLogit(part._3, part._2), part._2) :* breeze.numerics.pow(lPrimeLogit(unlinkLogit(part._3, part._2), part._2), 2))))
       }
     }else if(link == "probit") {
       yme.map { part =>
-        (part._3 :+ ((part._1 :+ (-1.0 :* unlinkProbit(part._3, part._2))) :* lPrimeProbit(part._3, part._2)));
-        (1.0 :/ (varianceBinomial(unlinkProbit(part._3, part._2), part._2) :* breeze.numerics.pow(lPrimeProbit(part._3, part._2), 2)))
+        ((part._3 :+ ((part._1 :+ (-1.0 :* unlinkProbit(part._3, part._2))) :* lPrimeProbit(unlinkProbit(part._3, part._2), part._2))),
+        (1.0 :/ (varianceBinomial(unlinkProbit(part._3, part._2), part._2) :* breeze.numerics.pow(lPrimeProbit(unlinkProbit(part._3, part._2), part._2), 2))))
       }
     }else{
       yme.map { part =>
-        (part._3 :+ ((part._1 :+ (-1.0 :* unlinkCloglog(part._3, part._2))) :* lPrimeCloglog(part._3, part._2)));
-        (1.0 :/ (varianceBinomial(unlinkCloglog(part._3, part._2), part._2) :* breeze.numerics.pow(lPrimeCloglog(part._3, part._2), 2)))
+        ((part._3 :+ ((part._1 :+ (-1.0 :* unlinkCloglog(part._3, part._2))) :* lPrimeCloglog(unlinkCloglog(part._3, part._2), part._2))),
+        (1.0 :/ (varianceBinomial(unlinkCloglog(part._3, part._2), part._2) :* breeze.numerics.pow(lPrimeCloglog(unlinkCloglog(part._3, part._2), part._2), 2))))
       }
     }
-    val z0 = RowPartitionedMatrix.fromMatrix(theObj.map(x => x(::, 0).toDenseMatrix))
+//    val z0 = RowPartitionedMatrix.fromMatrix(theObj.map(x => x(::, 0).toDenseMatrix.t))
+    val z0 = RowPartitionedMatrix.fromMatrix(theObj.map(x => x._1))
     val zOffset = z0.rdd.zip(offset.rdd).map {
       case(a, b) => (a.mat, b.mat)
     }
     val z1 = zOffset.map { part =>
       part._1 :+ (-1.0 :* part._2)
     }
-    val w = theObj.map( x => x(::, 1).toDenseMatrix)
+//    val w = theObj.map( x => x(::, 1).toDenseMatrix.t)
+    val w = theObj.map( x => x._2)
     new ZWobj(RowPartitionedMatrix.fromMatrix(z1), RowPartitionedMatrix.fromMatrix(w))
   }
 
@@ -610,7 +612,7 @@ object GLM {
     val npart = x.rdd.partitions.size
     val components = if (npart == 1) {
         fitSingle(y, x, family, link, tol, verbose)
-      }else{ // Will change to fitDouble
+      }else{
         fitMultiple(y, x, family, link, tol, verbose)
       }
     createObj(x, y, components, family, link)
