@@ -13,7 +13,7 @@ class lmPredict$Test extends FunSuite {
     val x = testDF.select("intercept", "x")
     val y = testDF.select("y")
     val lmTest = LM.fit(x, y)
-    val predicted = LM.predict(lmTest, x)
+    val predicted = lmTest.predict(x)
 
     assert(predicted.getClass.getName == "org.apache.spark.sql.DataFrame")
     assert(predicted.rdd.partitions.size == 1)
@@ -26,7 +26,7 @@ class lmPredict$Test extends FunSuite {
     val x = testDF.select("intercept", "x")
     val y = testDF.select("y")
     val lmTest = LM.fit(x, y)
-    val predicted = LM.predict(lmTest, x)
+    val predicted = lmTest.predict(x)
 
     assert(predicted.getClass.getName == "org.apache.spark.sql.DataFrame")
     assert(predicted.rdd.partitions.length == 4)
