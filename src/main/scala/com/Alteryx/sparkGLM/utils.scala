@@ -18,8 +18,15 @@ object utils {
   // DataFrame utility functions
   //
 
-  def matchCols (estDF: DataFrame, scoreDF: DataFrame): DataFrame = {
+  def matchCols(estDF: DataFrame, scoreDF: DataFrame): DataFrame = {
     val missingCols: Array[Column] = estDF.columns.diff(scoreDF.columns).map { field =>
+      lit(0).cast(DoubleType).as(field)
+    }
+    scoreDF.select(missingCols :+ col("*"):_*)
+  }
+
+  def matchCols(xnames: Array[String], scoreDF: DataFrame): DataFrame = {
+    val missingCols: Array[Column] = xnames.diff(scoreDF.columns).map { field =>
       lit(0).cast(DoubleType).as(field)
     }
     scoreDF.select(missingCols :+ col("*"):_*)
